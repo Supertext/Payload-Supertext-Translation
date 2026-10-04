@@ -1,0 +1,75 @@
+{
+  "name": "payload-supertext-translation",
+  "version": "0.1.0",
+  "description": "Supertext AI translation for Payload CMS 3 localized collections and globals",
+  "license": "MIT",
+  "author": "Supertext AG",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Supertext/Payload-Supertext-Translation.git"
+  },
+  "homepage": "https://github.com/Supertext/Payload-Supertext-Translation#readme",
+  "keywords": [
+    "payload",
+    "payloadcms",
+    "plugin",
+    "translation",
+    "localization",
+    "supertext",
+    "ai"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/exports/client.d.ts",
+      "import": "./dist/exports/client.js",
+      "default": "./dist/exports/client.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run clean && npm run build && npm test"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "peerDependencies": {
+    "@payloadcms/ui": "^3.0.0",
+    "payload": "^3.0.0",
+    "react": "^19.0.0"
+  },
+  "dependencies": {
+    "node-html-parser": "^7.1.0"
+  },
+  "devDependencies": {
+    "@payloadcms/db-sqlite": "^3.90.2",
+    "@payloadcms/richtext-lexical": "^3.90.2",
+    "@payloadcms/ui": "^3.90.2",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "payload": "^3.90.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  }
+}
