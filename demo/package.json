@@ -1,0 +1,38 @@
+{
+  "name": "payload-supertext-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Demo Payload app for the Supertext translation plugin",
+  "type": "module",
+  "scripts": {
+    "plugin": "cd .. && rm -f demo/vendor/*.tgz && npm pack --pack-destination demo/vendor && mv demo/vendor/payload-supertext-translation-[0-9]*.tgz demo/vendor/payload-supertext-translation.tgz",
+    "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
+    "build": "cross-env NODE_OPTIONS=--no-deprecation next build",
+    "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
+    "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap",
+    "generate:types": "cross-env NODE_OPTIONS=--no-deprecation payload generate:types",
+    "payload": "cross-env NODE_OPTIONS=--no-deprecation payload"
+  },
+  "dependencies": {
+    "@payloadcms/db-sqlite": "3.90.2",
+    "@payloadcms/next": "3.90.2",
+    "@payloadcms/richtext-lexical": "3.90.2",
+    "@payloadcms/ui": "3.90.2",
+    "cross-env": "^7.0.3",
+    "graphql": "^16.8.1",
+    "next": "16.3.8",
+    "payload": "3.90.2",
+    "payload-supertext-translation": "file:./vendor/payload-supertext-translation.tgz",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.9",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.7.3"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}

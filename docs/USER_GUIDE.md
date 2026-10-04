@@ -17,8 +17,17 @@ You get a green message per success, and a red one for any language that failed 
 
 Switch the locale selector to a translated language to see the result.
 
-- If the collection uses **drafts**, the translation is saved as a **draft**. The published version in that language stays unchanged until you review and click **Publish**.
+- If the collection uses **drafts**, the translation is saved as a **draft**. The published version in that language stays unchanged until you review and publish it.
 - Without drafts, the translation is saved immediately.
+
+### Publishing
+
+Publish each language after reviewing it, with the locale selector set to that language:
+
+- **Publish in &lt;language&gt;** (in the arrow menu next to Publish, or the main button if your administrator set it up that way) releases only that language.
+- **Publish** / **Publish all locales** releases the drafts of **every** language at once — including translations nobody has reviewed yet.
+
+If you are unsure which one the main button does, use the arrow menu and pick the language explicitly.
 
 Translating again overwrites the earlier translation of the translated fields in that language, including any manual edits you made there.
 

@@ -14,3 +14,5 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - Supertext AI file translation API v1 client (live/staging/testing environments, custom `apiUrl`).
 - Options: `languageMap`, `politeness`, `skipFieldNames` (default `slug`), per-field opt-out via `custom: { supertext: false }`, `pollIntervalMs`, `timeoutMs`, `disabled`.
 - Installation, user and developer guides; CI on Node 20 and 22.
+- Demo Payload site in `demo/` (Pages + Header, four Swiss locales, sample content) with a Dockerfile for the Railway demo.
+- Docs: how to publish one language at a time (`defaultLocalePublishOption: 'active'`), since Payload's default Publish releases all languages' drafts.

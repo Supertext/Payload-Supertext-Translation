@@ -14,6 +14,7 @@ src/
   supertext/client.ts      Supertext AI file API v1 client (fetch-based, no Payload dependency)
   components/TranslateButton.tsx   client component in the edit view header
   exports/client.ts        'payload-supertext-translation/client' entry (import map)
+demo/                      demo Payload site (Next.js), deployed to Railway — see "Demo app"
 ```
 
 ### Flow of one translation
@@ -102,7 +103,40 @@ Vitest, in `test/`:
 
 `.github/workflows/ci.yml` runs typecheck, tests and build on Node 20 and 22 for pushes to `main` and pull requests.
 
-Demo: planned as a containerized Payload app on Railway alongside the other CMS demos (not set up yet).
+### Demo app (`demo/`)
+
+A small Payload 3 + Next.js 16 site that uses the plugin the way a customer would: Pages (drafts, blocks in tabs, rich text, SEO group, a non-localized field) and a Header global, locales `en`, `de-CH`, `fr-CH`, `it-CH`, SQLite. A public frontend at `/<locale>/<slug>` shows the published version of each language.
+
+- `src/seed.ts` runs on start: creates the admin from `PAYLOAD_ADMIN_EMAIL`/`PAYLOAD_ADMIN_PASSWORD` when there are no users, and English sample content when there are no pages.
+- Schema changes need a migration: `cd demo && npm run payload migrate:create <name>`, commit `src/migrations/`. Production applies them on start (`prodMigrations`); there is no automatic schema push in production.
+- `localization.defaultLocalePublishOption: 'active'` makes **Publish** release only the language being viewed (see "Publishing" in the user guide).
+
+Run locally:
+
+```bash
+cd demo
+cp .env.example .env        # set PAYLOAD_SECRET, SUPERTEXT_API_KEY (staging key + SUPERTEXT_ENVIRONMENT=staging while developing)
+npm run plugin              # build + pack the plugin from the repo root into demo/vendor/
+npm install
+npm run dev                 # http://localhost:3000, admin at /admin
+```
+
+After changing plugin code, run `npm run plugin && npm install` again. The plugin is installed from a packed tarball (not a symlink) so Payload/React resolve to a single copy.
+
+`SUPERTEXT_API_URL` points the demo at any API base URL, e.g. a local fake Supertext for offline testing.
+
+### Railway deployment
+
+Service **Payload** in the Railway project `supertext-cms-demos` (region Amsterdam), deployed from this repo's `main` on every push.
+
+| Setting | Value |
+| --- | --- |
+| Builder | Dockerfile, path `demo/Dockerfile`, build context = repo root |
+| Volume | mounted at `/data` (SQLite database `/data/payload-demo.db`) |
+| Healthcheck | `/` |
+| Variables | `PAYLOAD_SECRET`, `SUPERTEXT_API_KEY`, `SUPERTEXT_ENVIRONMENT`, `PAYLOAD_ADMIN_EMAIL`, `PAYLOAD_ADMIN_PASSWORD` (set in Railway, never in the repo) |
+
+The Dockerfile packs the plugin from the repo root, installs it into the demo, builds Next.js in standalone mode and runs `node server.js` on port 3000. To reset the demo content, delete `/data/payload-demo.db` (or recreate the volume) and redeploy.
 
 ## Releasing
 

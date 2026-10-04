@@ -111,6 +111,20 @@ supertextTranslation({
 | `access` | logged-in user | `({ req }) => boolean` — who may start translations. The collection's/global's own read and update access is always enforced as well. |
 | `disabled` | `false` | Leave the endpoints and panel out of the config (the plugin adds no fields, so the schema is unaffected). |
 
+## Recommended: publish one language at a time
+
+With drafts, translations are saved as drafts. Payload's default **Publish** button publishes the latest draft of **all** languages at once, so pending translations in other languages would go live too. To review and release each language on its own, set:
+
+```ts
+localization: {
+  defaultLocale: 'en',
+  defaultLocalePublishOption: 'active', // "Publish" = only the language being viewed
+  locales: [/* ... */],
+}
+```
+
+"Publish all locales" remains available in the publish button's dropdown. This is a Payload setting; the plugin works either way.
+
 ## Hosting notes
 
 A translation request stays open until Supertext finishes (usually seconds, at most `timeoutMs`). That is fine on long-running Node servers and containers (e.g. Railway, Docker). On serverless platforms with short function limits (Vercel's default), raise the function timeout for `/api/supertext/*` or expect timeouts on long documents.
