@@ -10,6 +10,8 @@ plugins: [supertextTranslation({ collections: ['pages', 'posts'], globals: ['hea
 
 Translates localized `text`, `textarea` and Lexical `richText` fields, including inside groups, tabs, arrays and blocks. Formatting and links in rich text are preserved.
 
+**Live demo:** <https://payload-production-cfd2.up.railway.app> (admin at `/admin`, credentials from the Supertext team)
+
 ## Guides
 
 - [Installation guide](docs/INSTALLATION.md) — requirements, install, API key, languages, all settings, troubleshooting
