@@ -137,7 +137,9 @@ Service **Payload** in the Railway project `supertext-cms-demos` (region Amsterd
 | Healthcheck | `/` |
 | Variables | `DATABASE_URL` (Railway reference to the Postgres service's user, password, host and port, with database `payload_demo`), `PAYLOAD_SECRET`, `SUPERTEXT_API_KEY`, `SUPERTEXT_ENVIRONMENT`, `DEMO_ADMIN_EMAIL`, `DEMO_ADMIN_PASSWORD`, `DEMO_EDITOR_EMAIL`, `DEMO_EDITOR_PASSWORD` (older `PAYLOAD_ADMIN_*` still work) — set in Railway, never in the repo |
 
-The Dockerfile packs the plugin from the repo root, installs it into the demo, builds Next.js in standalone mode and runs `node server.js` on port 3000. Migrations run on start. To reset the demo content, drop the `payload_demo` database on the Postgres service and redeploy; it is recreated and re-seeded.
+The Dockerfile packs the plugin from the repo root, installs it into the demo, builds Next.js in standalone mode and runs `node server.js` on port 3000. If a push does not start a deployment, Railway's GitHub app has no access to this repository: in the Supertext GitHub organisation settings → *GitHub Apps* → **Railway** → *Configure*, add the repository under *Repository access*. A manual redeploy in Railway works in the meantime.
+
+Migrations run on start. To reset the demo content, drop the `payload_demo` database on the Postgres service and redeploy; it is recreated and re-seeded.
 
 ## Releasing
 
