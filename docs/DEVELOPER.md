@@ -64,6 +64,8 @@ AI file translation API v1, same as the WordPress plugin. Base URLs: `https://ap
 
 `source_lang` must be a primary subtag (`de`, not `de-CH`) or Supertext answers `INVALID_LANGUAGE_PAIR`; `target_lang` keeps its region. HTTP errors map to `SupertextError` codes: 401/403 `authentication_failure`, 404 `not_found`, 413 `payload_too_large`, 429 `too_many_requests`, 500/502/503 `service_unavailable`, otherwise `unexpected_status`; the first 200 characters of the response body are appended to the message.
 
+**Rate limit:** the API limits requests per second per key (HTTP 429, `RATE_LIMIT_EXCEEDED`); translating into several languages at once hits it. The client retries a 429 up to 4 times, waiting for `Retry-After` if sent, otherwise 1, 2, 4 and 8 seconds (plus jitter), before reporting *Too many requests*.
+
 ## Endpoints
 
 | Method | Path | Body / response |

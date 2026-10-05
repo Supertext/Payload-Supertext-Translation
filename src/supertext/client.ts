@@ -73,6 +73,16 @@ export type TranslateFileArgs = {
   politeness?: Politeness
 }
 
+/** Retries after HTTP 429 (the API limits requests per second), e.g. when several locales start at once. */
+export const RATE_LIMIT_RETRIES = 4
+
+/** Wait before retry `attempt` (0-based): the Retry-After header if present, else 1 s, 2 s, 4 s, 8 s plus jitter. */
+export function retryDelayMs(attempt: number, retryAfter: string | null): number {
+  const seconds = Number(retryAfter)
+  if (retryAfter && Number.isFinite(seconds) && seconds >= 0) return Math.min(30_000, seconds * 1000)
+  return 1000 * 2 ** attempt + Math.floor(Math.random() * 250)
+}
+
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 export class SupertextClient {
@@ -181,21 +191,26 @@ export class SupertextClient {
       throw new SupertextError('missing_api_key', 'No Supertext API key is configured.')
     }
     let res: Response
-    try {
-      res = await this.fetchImpl(this.baseUrl + path, {
-        body,
-        headers: {
-          Accept: 'application/json',
-          Authorization: authHeader(this.apiKey),
-        },
-        method,
-        signal: AbortSignal.timeout(this.requestTimeoutMs),
-      })
-    } catch (err) {
-      throw new SupertextError(
-        'transport_error',
-        `Could not reach Supertext: ${err instanceof Error ? err.message : String(err)}`,
-      )
+    for (let attempt = 0; ; attempt++) {
+      try {
+        res = await this.fetchImpl(this.baseUrl + path, {
+          body,
+          headers: {
+            Accept: 'application/json',
+            Authorization: authHeader(this.apiKey),
+          },
+          method,
+          signal: AbortSignal.timeout(this.requestTimeoutMs),
+        })
+      } catch (err) {
+        throw new SupertextError(
+          'transport_error',
+          `Could not reach Supertext: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+      if (res.status !== 429 || attempt >= RATE_LIMIT_RETRIES) break
+      await res.body?.cancel().catch(() => undefined)
+      await this.sleep(retryDelayMs(attempt, res.headers.get('retry-after')))
     }
     if (!res.ok) {
       const detail = (await res.text().catch(() => '')).replace(/<[^>]*>/g, '').trim().slice(0, 200)

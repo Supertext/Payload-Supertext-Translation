@@ -104,3 +104,29 @@ describe('authHeader', () => {
     expect(authHeader(' Supertext-Auth-Key abc+/= ')).toBe('Supertext-Auth-Key abc+/=')
   })
 })
+
+describe('rate limiting', () => {
+  it('retries after HTTP 429 and then succeeds', async () => {
+    const fake = fakeSupertext({ rateLimited: 2 })
+    const waits: number[] = []
+    const html = await client(fake, { sleep: async (ms) => void waits.push(ms) }).translateHtml({
+      html: '<p data-st-id="0">Hallo</p>',
+      targetLang: 'en-US',
+    })
+    expect(html).toContain('[en-US] Hallo')
+    expect(waits).toHaveLength(2)
+  })
+
+  it('gives up after a few retries', async () => {
+    const fake = fakeSupertext({ rateLimited: 99 })
+    await expect(client(fake).translateHtml({ html: '<p data-st-id="0">Hallo</p>', targetLang: 'en-US' })).rejects.toMatchObject({
+      code: 'too_many_requests',
+    })
+  })
+
+  it('honours Retry-After', async () => {
+    const { retryDelayMs } = await import('../src/supertext/client.js')
+    expect(retryDelayMs(0, '3')).toBe(3000)
+    expect(retryDelayMs(1, null)).toBeGreaterThanOrEqual(2000)
+  })
+})

@@ -6,10 +6,11 @@ export type Call = { method: string; url: string; form?: FormData }
  * In-memory stand-in for the Supertext AI file API. "Translates" by prefixing every
  * segment with `[<target_lang>] `. `statuses` scripts the status sequence per file.
  */
-export function fakeSupertext(opts: { statuses?: string[]; drop?: number[]; failStatus?: number } = {}) {
+export function fakeSupertext(opts: { statuses?: string[]; drop?: number[]; failStatus?: number; rateLimited?: number } = {}) {
   const calls: Call[] = []
   const files = new Map<string, { html: string; target: string; polls: number }>()
   let n = 0
+  let rateLimited = 0
 
   const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -20,6 +21,10 @@ export function fakeSupertext(opts: { statuses?: string[]; drop?: number[]; fail
     const auth = new Headers(init?.headers).get('Authorization')
     if (auth !== 'Supertext-Auth-Key test-key') return new Response('bad key', { status: 401 })
     if (opts.failStatus) return new Response('nope', { status: opts.failStatus })
+    if (opts.rateLimited && rateLimited < opts.rateLimited) {
+      rateLimited++
+      return new Response('{"error_code":"RATE_LIMIT_EXCEEDED"}', { status: 429 })
+    }
 
     if (method === 'POST' && url.endsWith('translate/ai/file')) {
       const file = form?.get('file') as Blob

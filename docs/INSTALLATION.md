@@ -160,6 +160,7 @@ The plugin adds no collections or fields, so no migration is needed. Translation
 
 | Symptom | Cause / fix |
 | --- | --- |
+| *Too many requests to Supertext* | The API's per-second limit was still exceeded after 4 automatic retries. Wait a moment and translate again. |
 | No Translate button | Collection/global not listed in `collections`/`globals`; localization not enabled; only one locale configured; or the user fails the `access` option. Regenerate the import map after changing the plugin config. |
 | "PayloadComponent not found in importMap" | Run `npx payload generate:importmap` and restart. |
 | "No Supertext API key is configured" | Set `SUPERTEXT_API_KEY` on the server and restart. |
