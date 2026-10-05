@@ -30,18 +30,43 @@ function richText(...paragraphs: string[]) {
 }
 
 /**
- * Runs on every start. Creates the admin from PAYLOAD_ADMIN_EMAIL / PAYLOAD_ADMIN_PASSWORD
- * when no user exists, and English sample content when there are no pages yet.
- * Without those variables, Payload shows its "create first user" screen instead.
+ * Demo accounts from environment variables (see "Demo accounts rule" in CLAUDE.md).
+ * Created on every start if missing; existing accounts are never changed.
+ * Payload's demo has no roles, so the editor account has the same access as the admin.
+ */
+const ACCOUNTS = [
+  { email: ['DEMO_ADMIN_EMAIL', 'PAYLOAD_ADMIN_EMAIL'], password: ['DEMO_ADMIN_PASSWORD', 'PAYLOAD_ADMIN_PASSWORD'], label: 'DEMO_ADMIN' },
+  { email: ['DEMO_EDITOR_EMAIL'], password: ['DEMO_EDITOR_PASSWORD'], label: 'DEMO_EDITOR' },
+] as const
+
+const env = (names: readonly string[]) => names.map((name) => process.env[name]?.trim()).find(Boolean) ?? ''
+
+async function ensureAccounts(payload: Payload): Promise<void> {
+  for (const account of ACCOUNTS) {
+    const email = env(account.email).toLowerCase()
+    const password = env(account.password)
+    if (!email || !password) continue
+    const { totalDocs } = await payload.count({ collection: 'users', where: { email: { equals: email } } })
+    if (totalDocs > 0) {
+      payload.logger.info(`[demo] ${account.label} account already exists, leaving it unchanged`)
+      continue
+    }
+    try {
+      await payload.create({ collection: 'users', data: { email, password } })
+      payload.logger.info(`[demo] created ${account.label} account`)
+    } catch (error) {
+      payload.logger.warn(`[demo] could not create ${account.label} account: ${(error as Error).message}`)
+    }
+  }
+}
+
+/**
+ * Runs on every start: demo accounts (above), and English sample content when
+ * there are no pages yet. Without any DEMO_* account variables, Payload shows its
+ * "create first user" screen instead.
  */
 export async function seed(payload: Payload): Promise<void> {
-  const email = process.env.PAYLOAD_ADMIN_EMAIL
-  const password = process.env.PAYLOAD_ADMIN_PASSWORD
-  const { totalDocs: users } = await payload.count({ collection: 'users' })
-  if (users === 0 && email && password) {
-    await payload.create({ collection: 'users', data: { email, password } })
-    payload.logger.info(`[demo] created admin user ${email}`)
-  }
+  await ensureAccounts(payload)
 
   const { totalDocs: pages } = await payload.count({ collection: 'pages' })
   if (pages > 0) return
