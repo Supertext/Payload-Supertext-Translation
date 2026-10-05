@@ -10,6 +10,7 @@ src/
   translate.ts             translateDocument(): read source locale → collect → Supertext → write target locales
   collect.ts               walks the field schema + document; returns Segments and the update payload
   segments.ts              Segment type, HTML build/parse, applying translations
+  lexical.ts               Lexical inline content <-> inline HTML (one segment per paragraph)
   languages.ts             Payload locale → Supertext code (target keeps region, source = primary subtag)
   supertext/client.ts      Supertext AI file API v1 client (fetch-based, no Payload dependency)
   components/TranslateButton.tsx   client component in the edit view header
@@ -41,13 +42,14 @@ demo/                      demo Payload site (Next.js), deployed to Railway — 
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"></head><body>
 <p data-st-id="0">Plain field text</p>
-<p><span data-st-id="1">Hello </span> <span data-st-id="2">bold</span></p>   <!-- one Lexical paragraph -->
+<p data-st-id="1">Need a <b data-n="0">human review</b>? Read <a data-n="1" href="https://example.com">our guide</a>.</p>   <!-- one Lexical paragraph -->
 </body></html>
 ```
 
 - Text is HTML-escaped; every segment carries `data-st-id` = its index. Supertext keeps markup and attributes and translates text nodes.
-- Text nodes of one Lexical block element (paragraph, heading, list item, quote; inline `link`/`autolink` descend) share a `<p>`, so the translator sees the whole sentence; formatting stays per text node.
-- Leading/trailing whitespace is stored on the segment and re-applied, so spacing between text nodes survives.
+- Each Lexical block element whose children are inline (paragraph, heading, list item, quote) is **one segment**, sent as inline HTML (`src/lexical.ts`): formatted text nodes become `<b>`, `<i>`, `<u>`, `<s>`, `<code>`, `<sub>`, `<sup>` (or `<span>`), links `<a href>`, line breaks `<br>`, each tagged `data-n` = index of the original node; unformatted text is bare. The translator can reorder words across formatting. On the way back each tagged element clones its original node (format, style, link fields) with the translated text; bare text becomes plain text nodes; tags the translator added are dropped, their text kept.
+- Earlier versions sent every text node as its own `<span data-st-id>`. The live API translates each `data-st-id` element on its own, which broke sentences at formatting boundaries (lower-case sentence starts, text moved outside spans), so don't go back to that.
+- Plain fields: leading/trailing whitespace is stored on the segment and re-applied.
 - A segment missing or empty in the response keeps its source text and is reported in `missing` (logged as a warning, surfaced to the editor).
 
 ## Supertext API protocol

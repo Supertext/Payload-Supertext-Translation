@@ -6,6 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- Rich text is translated a whole paragraph at a time with formatting and links as inline tags, instead of one piece per formatted run. Sentences that contain bold text or links now translate naturally.
 - Translating into several locales at once no longer fails with *Too many requests*: requests that hit Supertext's per-second rate limit are retried automatically.
 - The API key now works whether it is entered with or without the `Supertext-Auth-Key ` prefix Supertext shows it with.
 

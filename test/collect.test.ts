@@ -67,10 +67,8 @@ describe('collectSegments', () => {
       'title=Title',
       'tags.0=news',
       'tags.1=tech',
-      'body.root.0.0=Hello',
-      'body.root.0.1=bold',
-      'body.root.0.2.0=link',
-      'body.root.1.0=Second',
+      'body.root.0=Hello boldlink',
+      'body.root.1=Second',
       'seo.metaTitle=Meta',
       'subtitle=Sub',
       'media.caption=A cat',
@@ -81,11 +79,9 @@ describe('collectSegments', () => {
     ])
   })
 
-  it('groups Lexical text nodes per paragraph', () => {
-    const groups = segments.filter((s) => s.path.startsWith('body')).map((s) => s.group)
-    expect(groups[0]).toBe(groups[1])
-    expect(groups[1]).toBe(groups[2])
-    expect(groups[3]).not.toBe(groups[0])
+  it('sends each Lexical paragraph as one segment with formatting as tags', () => {
+    const body = segments.filter((s) => s.path.startsWith('body'))
+    expect(body.map((s) => s.html)).toEqual(['Hello <b data-n="0">bold</b><a data-n="1">link</a>', 'Second'])
   })
 
   it('only sends top-level keys that hold localized text', () => {

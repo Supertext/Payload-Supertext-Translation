@@ -1,5 +1,6 @@
 import type { Block, Field } from 'payload'
 
+import { fromInlineHtml, type LexicalNode, toInlineHtml } from './lexical.js'
 import { makeSegment, type Segment } from './segments.js'
 
 /**
@@ -28,7 +29,6 @@ export type CollectResult = {
 
 type Ctx = {
   blocksBySlug: Record<string, Block>
-  nextGroup: number
   segments: Segment[]
   skip: Set<string>
 }
@@ -47,7 +47,6 @@ export function isOptedOut(field: Field): boolean {
 export function collectSegments(fields: Field[], data: Data, options: CollectOptions = {}): CollectResult {
   const ctx: Ctx = {
     blocksBySlug: options.blocksBySlug ?? {},
-    nextGroup: 0,
     segments: [],
     skip: new Set(options.skipFieldNames ?? []),
   }
@@ -172,14 +171,12 @@ function resolveBlocks(field: BlocksLike, ctx: Ctx): Block[] {
     .filter((b): b is Block => Boolean(b))
 }
 
-function pushSegment(ctx: Ctx, holder: Segment['holder'], key: Segment['key'], value: string, path: string, group?: number) {
-  const seg = makeSegment(holder, key, value, path, group)
+function pushSegment(ctx: Ctx, holder: Segment['holder'], key: Segment['key'], value: string, path: string) {
+  const seg = makeSegment(holder, key, value, path)
   if (seg) ctx.segments.push(seg)
 }
 
 /* ------------------------------------------------------------------ Lexical */
-
-type LexicalNode = { children?: unknown[]; text?: unknown; type?: unknown }
 
 /** Inline element nodes whose text belongs to the surrounding paragraph. */
 const INLINE_TYPES = new Set(['autolink', 'link', 'mark'])
@@ -189,37 +186,47 @@ const isTextNode = (n: unknown): n is LexicalNode & { text: string } =>
 
 const isInline = (n: unknown) => isTextNode(n) || (isObject(n) && INLINE_TYPES.has(String(n.type)))
 
+const textOf = (nodes: unknown[]): string =>
+  nodes.map((n) => (isTextNode(n) ? n.text : isObject(n) && Array.isArray(n.children) ? textOf(n.children) : '')).join('')
+
 /**
  * Lexical editor state: `{ root: { children: [...] } }`. Every element whose children
- * contain text (paragraph, heading, list item, quote, ...) becomes one segment group,
- * with one segment per text node, so formatting (bold, links) stays on the right words.
- * Code blocks (`code-highlight` nodes) and Payload Lexical blocks are not translated.
+ * contain text (paragraph, heading, list item, quote, ...) becomes one segment, sent as
+ * inline HTML (bold, italic, links... as tags), so the translator sees the whole
+ * sentence and formatting moves with the words. Code blocks (`code-highlight` nodes)
+ * and Payload Lexical blocks are not translated.
  */
-export function collectLexical(value: unknown, path: string, ctx: Pick<Ctx, 'nextGroup' | 'segments'>): void {
+export function collectLexical(value: unknown, path: string, ctx: Pick<Ctx, 'segments'>): void {
   if (!isObject(value) || !isObject(value.root)) return
   walkLexical(value.root as LexicalNode, `${path}.root`, ctx)
 }
 
-function walkLexical(node: LexicalNode, path: string, ctx: Pick<Ctx, 'nextGroup' | 'segments'>): void {
+function walkLexical(node: LexicalNode, path: string, ctx: Pick<Ctx, 'segments'>): void {
   const children = node.children
   if (!Array.isArray(children)) return
   if (children.some(isInline)) {
-    const group = ctx.nextGroup++
-    collectInline(node, path, group, ctx)
+    const text = textOf(children).trim()
+    if (text === '') return
+    const nodes: LexicalNode[] = []
+    const html = toInlineHtml(children, nodes)
+    ctx.segments.push({
+      apply: (translated) => {
+        const rebuilt = fromInlineHtml(translated, nodes)
+        if (!rebuilt) return false
+        node.children = rebuilt
+        return true
+      },
+      holder: node as Data,
+      html,
+      key: 'children',
+      lead: '',
+      path,
+      text,
+      trail: '',
+    })
     return
   }
   children.forEach((child, i) => {
     if (isObject(child)) walkLexical(child as LexicalNode, `${path}.${i}`, ctx)
-  })
-}
-
-function collectInline(node: LexicalNode, path: string, group: number, ctx: Pick<Ctx, 'segments'>): void {
-  node.children?.forEach((child, i) => {
-    if (isTextNode(child)) {
-      const seg = makeSegment(child as unknown as Data, 'text', child.text, `${path}.${i}`, group)
-      if (seg) ctx.segments.push(seg)
-    } else if (isObject(child) && Array.isArray(child.children)) {
-      collectInline(child as LexicalNode, `${path}.${i}`, group, ctx)
-    }
   })
 }

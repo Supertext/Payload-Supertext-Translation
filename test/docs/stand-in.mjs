@@ -33,9 +33,10 @@ http
     if (!match) return send(404, {})
     if (req.method === 'DELETE') return send(200, {})
     if (match[2] === '/status') return send(200, { status: 'done' })
-    // Segments are leaf elements carrying data-st-id; swap their text when we know it.
-    const html = files.get(match[1]).replace(/(<(\w+) data-st-id="\d+">)([^<]*)(<\/\2>)/g, (all, open, _tag, text, close) => {
-      const de = german[decode(text).trim()]
+    // One <p data-st-id> per segment; rich text arrives as inline HTML (keys in sample-de.json are that HTML).
+    const html = files.get(match[1]).replace(/(<p data-st-id="\d+">)([\s\S]*?)(<\/p>)/g, (all, open, inner, close) => {
+      if (german[inner] !== undefined) return open + german[inner] + close
+      const de = german[decode(inner).trim()]
       return de === undefined ? all : open + encode(de) + close
     })
     send(200, html, 'text/html')
