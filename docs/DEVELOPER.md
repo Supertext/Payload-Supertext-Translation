@@ -122,7 +122,7 @@ npm install
 npm run dev                 # http://localhost:3000, admin at /admin
 ```
 
-After changing plugin code, run `npm run plugin && npm install` again. The plugin is installed from a packed tarball (not a symlink) so Payload/React resolve to a single copy.
+After changing plugin code, run `npm run plugin && npm install` again. The plugin is installed from a packed tarball (not a symlink) so Payload/React resolve to a single copy. Because the tarball changes with every edit, `scripts/unpin-plugin.mjs` removes its hash from `package-lock.json` (otherwise npm fails with EINTEGRITY, or installs a stale copy from its cache); the Dockerfile runs it too.
 
 `SUPERTEXT_API_URL` points the demo at any API base URL, e.g. a local fake Supertext for offline testing.
 

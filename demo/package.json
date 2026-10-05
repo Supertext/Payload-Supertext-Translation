@@ -5,7 +5,7 @@
   "description": "Demo Payload app for the Supertext translation plugin",
   "type": "module",
   "scripts": {
-    "plugin": "cd .. && rm -f demo/vendor/*.tgz && npm pack --pack-destination demo/vendor && mv demo/vendor/payload-supertext-translation-[0-9]*.tgz demo/vendor/payload-supertext-translation.tgz",
+    "plugin": "cd .. && rm -f demo/vendor/*.tgz && npm pack --pack-destination demo/vendor && mv demo/vendor/payload-supertext-translation-[0-9]*.tgz demo/vendor/payload-supertext-translation.tgz && node demo/scripts/unpin-plugin.mjs",
     "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
     "build": "cross-env NODE_OPTIONS=--no-deprecation next build",
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",

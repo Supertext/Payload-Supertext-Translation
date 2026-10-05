@@ -23,9 +23,10 @@ RUN npm ci && npm pack && mv payload-supertext-translation-*.tgz /payload-supert
 FROM base AS builder
 WORKDIR /app
 COPY demo/package.json demo/package-lock.json demo/.npmrc ./
+COPY demo/scripts ./scripts
 COPY --from=plugin /payload-supertext-translation.tgz ./vendor/payload-supertext-translation.tgz
-# `npm install` (not `ci`): the plugin tarball is rebuilt each time, so its lockfile hash changes.
-RUN npm install --no-audit --no-fund
+# The plugin tarball is rebuilt each time, so its lockfile hash is dropped first.
+RUN node scripts/unpin-plugin.mjs && npm install --no-audit --no-fund
 COPY demo/ ./
 COPY --from=plugin /payload-supertext-translation.tgz ./vendor/payload-supertext-translation.tgz
 RUN npm run build
