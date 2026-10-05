@@ -63,6 +63,10 @@ SUPERTEXT_API_KEY=your-key-here
 
 Alternatively pass `apiKey` in the plugin options (read it from your own secret store, not a literal). Without a key the Translate panel shows "No Supertext API key is configured" and the endpoint answers HTTP 500.
 
+Once the plugin is installed and the key is set, every enabled collection and global shows a **Translate** button next to Save and Publish:
+
+![Edit view of an enabled collection with the Translate button](images/edit-view.png)
+
 ## Which fields are translated
 
 Only fields that are **localized** — the field itself, or a parent array/group/tab/blocks field, has `localized: true`:
@@ -80,6 +84,10 @@ To exclude a single localized field:
 ```
 
 ## Language setup
+
+The languages offered in the Translate menu are your Payload locales (`localization.locales`):
+
+<img src="images/locales.png" alt="Payload locale selector: English (en), Deutsch (Schweiz) (de-CH), Français (Suisse) (fr-CH), Italiano (Svizzera) (it-CH)" width="520">
 
 Payload locale codes are sent to Supertext as-is, so BCP-47 codes such as `en`, `de`, `de-CH`, `fr-FR`, `pt-BR` need no setup. The source language is always sent as its primary subtag (`de-CH` → `de`), because Supertext rejects regional source codes.
 

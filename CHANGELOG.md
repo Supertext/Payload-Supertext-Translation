@@ -15,5 +15,6 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - Options: `languageMap`, `politeness`, `skipFieldNames` (default `slug`), per-field opt-out via `custom: { supertext: false }`, `pollIntervalMs`, `timeoutMs`, `disabled`.
 - Installation, user and developer guides; CI on Node 20 and 22.
 - Demo Payload site in `demo/` (Pages + Header, four Swiss locales, sample content, Postgres) with a Dockerfile for the Railway demo.
+- Docs: screenshots in the user and installation guides (Translate control, result, rich text, locales), regenerated with `test/docs/screenshots.mjs`.
 - Demo: accounts from `DEMO_ADMIN_*` and `DEMO_EDITOR_*` variables, created on every start if missing (`PAYLOAD_ADMIN_*` still work).
 - Docs: how to publish one language at a time (`defaultLocalePublishOption: 'active'`), since Payload's default Publish releases all languages' drafts.

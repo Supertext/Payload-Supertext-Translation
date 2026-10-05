@@ -2,6 +2,8 @@
 
 For editors working in the Payload admin panel.
 
+*Screenshots: the demo site in this repository (Payload 3.90).*
+
 ## Translate a document
 
 1. Open the page, post or global you want to translate.
@@ -11,11 +13,23 @@ For editors working in the Payload admin panel.
 5. Tick the languages to translate **into** (or click *All*), then click **Translate into …**.
 6. Wait for the confirmation. Short pages take a few seconds; long ones can take up to a few minutes. Keep the tab open.
 
+![An English page in the Payload admin with the Translate button next to Save Draft and Publish](images/edit-view.png)
+
+<img src="images/translate-menu.png" alt="Translate with Supertext: from en into Deutsch (Schweiz) (ticked), Français (Suisse), Italiano (Svizzera); button Translate into 1" width="300">
+
+<img src="images/translated-toast.png" alt="Confirmation: Translated into Deutsch (Schweiz)." width="420">
+
 You get a green message per success, and a red one for any language that failed — the other languages are still saved.
 
 ## Review and publish
 
 Switch the locale selector to a translated language to see the result.
+
+![The page in Deutsch (Schweiz): German title, hero and FAQ fields, status Changed (a draft), Publish in Deutsch (Schweiz)](images/translated-de.png)
+
+Rich text keeps its formatting and links:
+
+![Body tab in Deutsch (Schweiz): German rich text with bold words and a link in the right places](images/translated-de-body.png)
 
 - If the collection uses **drafts**, the translation is saved as a **draft**. The published version in that language stays unchanged until you review and publish it.
 - Without drafts, the translation is saved immediately.
