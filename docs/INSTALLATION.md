@@ -61,6 +61,8 @@ Set the key as an environment variable on the server — never commit it:
 SUPERTEXT_API_KEY=your-key-here
 ```
 
+The key can be entered as Supertext shows it (`Supertext-Auth-Key …`) or without that prefix; both work.
+
 Alternatively pass `apiKey` in the plugin options (read it from your own secret store, not a literal). Without a key the Translate panel shows "No Supertext API key is configured" and the endpoint answers HTTP 500.
 
 Once the plugin is installed and the key is set, every enabled collection and global shows a **Translate** button next to Save and Publish:
@@ -107,7 +109,7 @@ supertextTranslation({
 | --- | --- | --- |
 | `collections` | `[]` | Collection slugs that get the Translate panel and may be translated via the endpoint. |
 | `globals` | `[]` | Global slugs, same as above. |
-| `apiKey` | `process.env.SUPERTEXT_API_KEY` | Supertext API key. |
+| `apiKey` | `process.env.SUPERTEXT_API_KEY` | Supertext API key, with or without the `Supertext-Auth-Key ` prefix. |
 | `environment` | `'live'` | `live`, `staging` or `testing` Supertext API. |
 | `apiUrl` | — | Explicit API base URL (e.g. a proxy). Overrides `environment`. |
 | `languageMap` | `{}` | Payload locale → Supertext language code. |

@@ -186,7 +186,7 @@ export class SupertextClient {
         body,
         headers: {
           Accept: 'application/json',
-          Authorization: `Supertext-Auth-Key ${this.apiKey}`,
+          Authorization: authHeader(this.apiKey),
         },
         method,
         signal: AbortSignal.timeout(this.requestTimeoutMs),
@@ -237,4 +237,12 @@ export function statusError(status: number, detail = ''): SupertextError {
       message = `Supertext sent an unexpected status code ${status}.`
   }
   return new SupertextError(code, detail ? `${message} — ${detail}` : message, status)
+}
+
+/**
+ * The Authorization header value. Accepts the key with or without the
+ * `Supertext-Auth-Key ` prefix (Supertext shows it with the prefix).
+ */
+export function authHeader(apiKey: string): string {
+  return `Supertext-Auth-Key ${apiKey.trim().replace(/^Supertext-Auth-Key\s+/i, '')}`
 }

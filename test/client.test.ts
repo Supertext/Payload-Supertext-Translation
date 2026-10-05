@@ -96,3 +96,11 @@ describe('language codes', () => {
     expect(sourceCode('ch', { ch: 'de-CH' })).toBe('de')
   })
 })
+
+describe('authHeader', () => {
+  it('accepts the key with or without the Supertext-Auth-Key prefix', async () => {
+    const { authHeader } = await import('../src/supertext/client.js')
+    expect(authHeader('abc+/=')).toBe('Supertext-Auth-Key abc+/=')
+    expect(authHeader(' Supertext-Auth-Key abc+/= ')).toBe('Supertext-Auth-Key abc+/=')
+  })
+})

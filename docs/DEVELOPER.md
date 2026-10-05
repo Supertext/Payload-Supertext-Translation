@@ -52,7 +52,7 @@ demo/                      demo Payload site (Next.js), deployed to Railway — 
 
 ## Supertext API protocol
 
-AI file translation API v1, same as the WordPress plugin. Base URLs: `https://api.supertext.com/v1/` (live), `https://api.staging.supertext.com/v1/`, `https://api.testing.supertext.com/v1/`. Header `Authorization: Supertext-Auth-Key <key>`, `Accept: application/json`.
+AI file translation API v1, same as the WordPress plugin. Base URLs: `https://api.supertext.com/v1/` (live), `https://api.staging.supertext.com/v1/`, `https://api.testing.supertext.com/v1/`. Header `Authorization: Supertext-Auth-Key <key>`, `Accept: application/json`. The key may be configured with or without the `Supertext-Auth-Key ` prefix; the client strips it and always sends exactly one. The header name must be `Authorization` (the live API answers 403 to `Authentication`).
 
 | Step | Request | Notes |
 | --- | --- | --- |

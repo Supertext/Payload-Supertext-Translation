@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Fixed
+
+- The API key now works whether it is entered with or without the `Supertext-Auth-Key ` prefix Supertext shows it with.
+
 ### Added
 
 - Payload 3 plugin `supertextTranslation()` for collections and globals.
