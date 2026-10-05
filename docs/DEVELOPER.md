@@ -105,7 +105,7 @@ Vitest, in `test/`:
 
 ### Demo app (`demo/`)
 
-A small Payload 3 + Next.js 16 site that uses the plugin the way a customer would: Pages (drafts, blocks in tabs, rich text, SEO group, a non-localized field) and a Header global, locales `en`, `de-CH`, `fr-CH`, `it-CH`, SQLite. A public frontend at `/<locale>/<slug>` shows the published version of each language.
+A small Payload 3 + Next.js 16 site that uses the plugin the way a customer would: Pages (drafts, blocks in tabs, rich text, SEO group, a non-localized field) and a Header global, locales `en`, `de-CH`, `fr-CH`, `it-CH`, Postgres. A public frontend at `/<locale>/<slug>` shows the published version of each language.
 
 - `src/seed.ts` runs on start: creates the admin from `PAYLOAD_ADMIN_EMAIL`/`PAYLOAD_ADMIN_PASSWORD` when there are no users, and English sample content when there are no pages.
 - Schema changes need a migration: `cd demo && npm run payload migrate:create <name>`, commit `src/migrations/`. Production applies them on start (`prodMigrations`); there is no automatic schema push in production.
@@ -115,6 +115,7 @@ Run locally:
 
 ```bash
 cd demo
+docker compose up -d        # local Postgres on :5432 (or point DATABASE_URL at any Postgres)
 cp .env.example .env        # set PAYLOAD_SECRET, SUPERTEXT_API_KEY (staging key + SUPERTEXT_ENVIRONMENT=staging while developing)
 npm run plugin              # build + pack the plugin from the repo root into demo/vendor/
 npm install
@@ -132,11 +133,11 @@ Service **Payload** in the Railway project `supertext-cms-demos` (region Amsterd
 | Setting | Value |
 | --- | --- |
 | Builder | Dockerfile, path `demo/Dockerfile`, build context = repo root |
-| Volume | mounted at `/data` (SQLite database `/data/payload-demo.db`) |
+| Database | Database `payload_demo` on the project's shared **Postgres** service (created automatically on first start; Strapi's data lives in its own database). No volume — the project is at Railway's 3-volume limit. |
 | Healthcheck | `/` |
-| Variables | `PAYLOAD_SECRET`, `SUPERTEXT_API_KEY`, `SUPERTEXT_ENVIRONMENT`, `PAYLOAD_ADMIN_EMAIL`, `PAYLOAD_ADMIN_PASSWORD` (set in Railway, never in the repo) |
+| Variables | `DATABASE_URL` (Railway reference to the Postgres service's user, password, host and port, with database `payload_demo`), `PAYLOAD_SECRET`, `SUPERTEXT_API_KEY`, `SUPERTEXT_ENVIRONMENT`, `PAYLOAD_ADMIN_EMAIL`, `PAYLOAD_ADMIN_PASSWORD` — set in Railway, never in the repo |
 
-The Dockerfile packs the plugin from the repo root, installs it into the demo, builds Next.js in standalone mode and runs `node server.js` on port 3000. To reset the demo content, delete `/data/payload-demo.db` (or recreate the volume) and redeploy.
+The Dockerfile packs the plugin from the repo root, installs it into the demo, builds Next.js in standalone mode and runs `node server.js` on port 3000. Migrations run on start. To reset the demo content, drop the `payload_demo` database on the Postgres service and redeploy; it is recreated and re-seeded.
 
 ## Releasing
 

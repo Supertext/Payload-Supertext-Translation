@@ -1,4 +1,4 @@
-import { sqliteAdapter } from '@payloadcms/db-sqlite'
+import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import path from 'path'
 import { buildConfig } from 'payload'
@@ -20,9 +20,9 @@ export default buildConfig({
     user: Users.slug,
   },
   collections: [Users, Pages],
-  db: sqliteAdapter({
-    // On Railway the volume is mounted at /data.
-    client: { url: process.env.DATABASE_URL || 'file:./payload-demo.db' },
+  db: postgresAdapter({
+    // The database is created on first start if it doesn't exist yet.
+    pool: { connectionString: process.env.DATABASE_URL || 'postgres://postgres@127.0.0.1:5432/payload_demo' },
     // Applied automatically on start in production. After changing collections or
     // globals, run `npm run payload migrate:create <name>` and commit the result.
     prodMigrations: migrations,

@@ -2,9 +2,7 @@ node_modules/
 .next/
 next-env.d.ts
 vendor/
-*.db
-*.db-shm
-*.db-wal
+*.tsbuildinfo
 .env
 .env.*
 !.env.example

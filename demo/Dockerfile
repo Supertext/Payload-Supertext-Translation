@@ -3,7 +3,8 @@
 # so the image always contains the plugin as committed, packed like an npm release.
 #
 #   docker build -f demo/Dockerfile -t payload-supertext-demo .
-#   docker run -p 3000:3000 -v payload-data:/data -e PAYLOAD_SECRET=... -e SUPERTEXT_API_KEY=... payload-supertext-demo
+#   docker run -p 3000:3000 -e DATABASE_URL=postgres://user:pass@host:5432/payload_demo \
+#     -e PAYLOAD_SECRET=... -e SUPERTEXT_API_KEY=... payload-supertext-demo
 
 FROM node:22-slim AS base
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -34,11 +35,9 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
-    HOSTNAME=0.0.0.0 \
-    DATABASE_URL=file:/data/payload-demo.db
+    HOSTNAME=0.0.0.0
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-RUN mkdir -p /data
 EXPOSE 3000
 CMD ["node", "server.js"]

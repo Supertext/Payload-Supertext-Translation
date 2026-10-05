@@ -9,7 +9,7 @@ For administrators and developers who set up a Payload project. Editors: see the
 | Payload | 3.x (tested with 3.90) |
 | Node.js | 20.9 or newer |
 | React | 19 (as required by Payload 3) |
-| Database | any Payload adapter (tested with SQLite; MongoDB and Postgres use the same Local API) |
+| Database | any Payload adapter (tested with SQLite and Postgres; MongoDB uses the same Local API) |
 | Payload localization | must be enabled — the plugin translates between your configured locales |
 | Supertext | an API key with access to AI translation (<https://www.supertext.com/en/integrations/api>) |
 
