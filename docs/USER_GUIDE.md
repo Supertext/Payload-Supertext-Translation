@@ -64,7 +64,7 @@ Translating again overwrites the earlier translation of the translated fields in
 | --- | --- |
 | *Save the document before translating it.* | New documents must be saved once first. |
 | *You have unsaved changes…* | Save first; otherwise your latest edits are not translated. |
-| *No Supertext API key is configured.* | Ask your administrator to set up the Supertext key. |
+| *No Supertext API key is configured.* | Ask your administrator to set up the Supertext key (the [Installation guide](INSTALLATION.md#api-key) explains how to get one). |
 | *Some passages came back empty and kept the source text* | Supertext returned nothing for a few passages; check them in the translated language. |
 | *Authentication failure…* | The Supertext key is invalid. Ask your administrator. |
 | *Your Supertext translation limit is exceeded…* | The company's Supertext quota is used up. |

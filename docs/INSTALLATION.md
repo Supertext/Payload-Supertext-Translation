@@ -11,7 +11,7 @@ For administrators and developers who set up a Payload project. Editors: see the
 | React | 19 (as required by Payload 3) |
 | Database | any Payload adapter (tested with SQLite and Postgres; MongoDB uses the same Local API) |
 | Payload localization | must be enabled — the plugin translates between your configured locales |
-| Supertext | an API key with access to AI translation (<https://www.supertext.com/en/integrations/api>) |
+| Supertext | a Supertext account and an API key with access to AI translation — see [API key](#api-key) |
 
 The server must be able to reach `https://api.supertext.com` over HTTPS.
 
@@ -55,6 +55,11 @@ If you skip this step, the admin panel shows an error about `payload-supertext-t
 
 ## API key
 
+To get a key:
+
+1. **No Supertext account yet?** Create one (or log in) at <https://www.supertext.com/person/en/account/signin> — you sign in or register with your email address.
+2. **Generate your API key** at supertext.com → **Integrations → API**: <https://www.supertext.com/en/integrations/api>. Generating a key requires the **Admin** role in your Supertext account; if you don't have it, ask your Supertext account's administrator.
+
 Set the key as an environment variable on the server — never commit it:
 
 ```bash
@@ -63,7 +68,7 @@ SUPERTEXT_API_KEY=your-key-here
 
 The key can be entered as Supertext shows it (`Supertext-Auth-Key …`) or without that prefix; both work.
 
-Alternatively pass `apiKey` in the plugin options (read it from your own secret store, not a literal). Without a key the Translate panel shows "No Supertext API key is configured" and the endpoint answers HTTP 500.
+Alternatively pass `apiKey` in the plugin options (read it from your own secret store, not a literal). Without a key the Translate panel shows "No Supertext API key is configured" and the endpoint answers HTTP 500 with a message that links to the signup and API key pages above.
 
 Once the plugin is installed and the key is set, every enabled collection and global shows a **Translate** button next to Save and Publish:
 
@@ -163,8 +168,8 @@ The plugin adds no collections or fields, so no migration is needed. Translation
 | *Too many requests to Supertext* | The API's per-second limit was still exceeded after 4 automatic retries. Wait a moment and translate again. |
 | No Translate button | Collection/global not listed in `collections`/`globals`; localization not enabled; only one locale configured; or the user fails the `access` option. Regenerate the import map after changing the plugin config. |
 | "PayloadComponent not found in importMap" | Run `npx payload generate:importmap` and restart. |
-| "No Supertext API key is configured" | Set `SUPERTEXT_API_KEY` on the server and restart. |
-| "Authentication failure" | The key is wrong or for another environment (`live` vs `staging`). |
+| "No Supertext API key is configured" | Set `SUPERTEXT_API_KEY` on the server and restart. No key yet? See [API key](#api-key) (account signup and key generation, Admin role required). |
+| "Authentication failure" | The key is wrong or for another environment (`live` vs `staging`). Generate a new one at <https://www.supertext.com/en/integrations/api> (Admin role required). |
 | "Your Supertext translation limit is exceeded" | The Supertext subscription quota is used up. |
 | `INVALID_LANGUAGE_PAIR` in the error | The target code isn't a language Supertext supports; add a `languageMap` entry. |
 | "Timed out waiting…" | Very long document or slow service; raise `timeoutMs` (and the platform's request timeout). |

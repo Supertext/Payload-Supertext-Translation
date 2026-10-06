@@ -12,6 +12,8 @@ Translates localized `text`, `textarea` and Lexical `richText` fields, including
 
 **Live demo:** <https://payload-production-cfd2.up.railway.app> (admin at `/admin`, credentials from the Supertext team)
 
+**Requirements:** a Supertext account ([create one or log in](https://www.supertext.com/person/en/account/signin)) and an API key from supertext.com → [Integrations → API](https://www.supertext.com/en/integrations/api) (requires the Admin role), set as `SUPERTEXT_API_KEY`.
+
 ## Guides
 
 - [Installation guide](docs/INSTALLATION.md) — requirements, install, API key, languages, all settings, troubleshooting

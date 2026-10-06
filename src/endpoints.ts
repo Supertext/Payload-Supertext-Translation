@@ -61,7 +61,9 @@ export function createEndpoints(options: SupertextTranslationOptions): Endpoint[
         if (!req.user) return error(401, 'Not logged in.')
         if (!(await canTranslate(req))) return error(403, 'You are not allowed to start Supertext translations.')
         if (resolveApiKey(options) === '') {
-          return error(500, 'No Supertext API key is configured. Set SUPERTEXT_API_KEY or the plugin apiKey option.')
+          return error(500, 'No Supertext API key is configured. Set SUPERTEXT_API_KEY or the plugin apiKey option. ' +
+              'No Supertext account yet? Create one at https://www.supertext.com/person/en/account/signin. ' +
+              'Generate your API key at https://www.supertext.com/en/integrations/api (requires the Admin role).')
         }
 
         const locales = localeCodes(req)

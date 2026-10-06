@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Changed
+
+- Where the API key is set up (installation guide, README, `apiKey` option docs, demo `.env.example`) and in the "No Supertext API key is configured" server error, administrators now get links to create a Supertext account and to generate the API key at supertext.com → Integrations → API (requires the Admin role).
+
 ### Fixed
 
 - Rich text is translated a whole paragraph at a time with formatting and links as inline tags, instead of one piece per formatted run. Sentences that contain bold text or links now translate naturally.

@@ -11,7 +11,13 @@ export type SupertextTranslationOptions = {
   /** Globals that get the panel. */
   globals?: GlobalSlug[]
 
-  /** Supertext API key. Defaults to `process.env.SUPERTEXT_API_KEY`. Never commit it. */
+  /**
+   * Supertext API key. Defaults to `process.env.SUPERTEXT_API_KEY`. Never commit it.
+   *
+   * No Supertext account yet? Create one at https://www.supertext.com/person/en/account/signin.
+   * Generate the key at supertext.com → Integrations → API (https://www.supertext.com/en/integrations/api);
+   * this requires the Admin role in your Supertext account.
+   */
   apiKey?: string
   /** `live` (default), `staging` or `testing`. Ignored when `apiUrl` is set. */
   environment?: SupertextEnvironment
