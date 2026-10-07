@@ -4,6 +4,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-07
+
 ### Changed
 
 - Where the API key is set up (installation guide, README, `apiKey` option docs, demo `.env.example`) and in the "No Supertext API key is configured" server error, administrators now get links to create a Supertext account and to generate the API key at supertext.com → Integrations → API (requires the Admin role).
