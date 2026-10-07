@@ -164,11 +164,14 @@ Use `localhost`, not `127.0.0.1`: `next dev` blocks its dev assets for other ori
 
 ## Releasing
 
-1. Move *Unreleased* entries in `CHANGELOG.md` under a new version heading.
-2. Bump `version` in `package.json`.
-3. Commit, tag `vX.Y.Z`, push with tags.
-4. Publishing to npm is not set up yet; until then installs use the GitHub URL (optionally `#vX.Y.Z`).
+Releases are published by `.github/workflows/release.yml` when the version is officially bumped; nobody tags or creates releases by hand.
 
+1. Move the *Unreleased* entries in `CHANGELOG.md` under a new `## [X.Y.Z] - YYYY-MM-DD` section, and keep an empty *Unreleased* above it.
+2. Set the same version in:
+   - `package.json`: the npm package version
+3. Push to `main`. The workflow checks that the version files match `CHANGELOG.md`, then tags `vX.Y.Z` and creates the GitHub release with the CHANGELOG section as notes (0.x versions as pre-releases). A push that adds no new version does nothing, and a version that is already released is skipped. After fixing a failed run, start it again with *Run workflow* on the *Release* workflow.
+
+Publishing to npm is not set up yet; until then installs use the GitHub URL (optionally `#vX.Y.Z`).
 ## Known limitations / roadmap
 
 - Translation is synchronous within the HTTP request (like the WordPress plugin). Next: run it as a Payload Jobs Queue task so long documents and bulk translation don't depend on request timeouts.
