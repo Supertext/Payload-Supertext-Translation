@@ -1,6 +1,7 @@
 import type { Field, Payload, PayloadRequest } from 'payload'
 
 import { collectSegments } from './collect.js'
+import { errorMessage } from './i18n.js'
 import { politenessFor, sourceCode, targetCode } from './languages.js'
 import { applyTranslations, buildHtml, parseHtml } from './segments.js'
 import { SupertextClient, SupertextError } from './supertext/client.js'
@@ -120,7 +121,7 @@ export async function translateDocument(args: TranslateDocumentArgs): Promise<Lo
         payload.logger.error({ err }, `[supertext] ${collection ?? global} ${id ?? ''} → ${locale} failed`)
         return {
           code: err instanceof SupertextError ? err.code : undefined,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(req, err),
           locale,
           ok: false,
         }

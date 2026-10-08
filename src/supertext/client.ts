@@ -37,15 +37,21 @@ export type SupertextErrorCode =
   | 'transport_error'
   | 'unexpected_status'
 
+/**
+ * `message` is English (logs, API clients). UIs translate `code` and append `detail`
+ * (the API's or network's own explanation, untranslated) when it is set.
+ */
 export class SupertextError extends Error {
   readonly code: SupertextErrorCode
   readonly status?: number
+  readonly detail?: string
 
-  constructor(code: SupertextErrorCode, message: string, status?: number) {
+  constructor(code: SupertextErrorCode, message: string, status?: number, detail?: string) {
     super(message)
     this.name = 'SupertextError'
     this.code = code
     this.status = status
+    this.detail = detail || undefined
   }
 }
 
@@ -203,10 +209,8 @@ export class SupertextClient {
           signal: AbortSignal.timeout(this.requestTimeoutMs),
         })
       } catch (err) {
-        throw new SupertextError(
-          'transport_error',
-          `Could not reach Supertext: ${err instanceof Error ? err.message : String(err)}`,
-        )
+        const detail = err instanceof Error ? err.message : String(err)
+        throw new SupertextError('transport_error', `Could not reach Supertext: ${detail}`, undefined, detail)
       }
       if (res.status !== 429 || attempt >= RATE_LIMIT_RETRIES) break
       await res.body?.cancel().catch(() => undefined)
@@ -251,7 +255,7 @@ export function statusError(status: number, detail = ''): SupertextError {
       code = 'unexpected_status'
       message = `Supertext sent an unexpected status code ${status}.`
   }
-  return new SupertextError(code, detail ? `${message} — ${detail}` : message, status)
+  return new SupertextError(code, detail ? `${message} — ${detail}` : message, status, detail)
 }
 
 /**

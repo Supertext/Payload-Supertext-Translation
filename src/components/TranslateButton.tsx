@@ -1,8 +1,17 @@
 'use client'
 
-import { Button, toast, useConfig, useDocumentInfo, useFormModified, useLocale } from '@payloadcms/ui'
+import {
+  Button,
+  toast,
+  useConfig,
+  useDocumentInfo,
+  useFormModified,
+  useLocale,
+  useTranslation,
+} from '@payloadcms/ui'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import type { SupertextI18nKey, supertextTranslations } from '../translations.js'
 import type { LocaleResult, TranslateResponse } from '../types.js'
 
 type Status = { apiKeyConfigured: boolean; canTranslate: boolean; locales: string[] }
@@ -16,6 +25,7 @@ export function TranslateButton() {
   const { collectionSlug, globalSlug, id } = useDocumentInfo()
   const locale = useLocale()
   const modified = useFormModified()
+  const { i18n, t } = useTranslation<(typeof supertextTranslations)['en'], SupertextI18nKey>()
 
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -30,9 +40,11 @@ export function TranslateButton() {
   const targets = useMemo(() => {
     if (!localization) return []
     return localization.locales
-      .map((l) => (typeof l === 'string' ? { code: l, label: l } : { code: l.code, label: labelOf(l.label, l.code) }))
+      .map((l) =>
+        typeof l === 'string' ? { code: l, label: l } : { code: l.code, label: labelOf(l.label, l.code, i18n.language) },
+      )
       .filter((l) => l.code !== sourceLocale)
-  }, [localization, sourceLocale])
+  }, [localization, sourceLocale, i18n.language])
 
   useEffect(() => {
     let cancelled = false
@@ -59,11 +71,11 @@ export function TranslateButton() {
 
   const unsaved = Boolean(collectionSlug) && !id
   const disabledReason = unsaved
-    ? 'Save the document before translating it.'
+    ? t('supertext:saveFirst')
     : status && !status.apiKeyConfigured
-      ? 'No Supertext API key is configured. Ask an administrator.'
+      ? t('supertext:noApiKey')
       : modified
-        ? 'You have unsaved changes. Supertext translates the saved version; save first to include them.'
+        ? t('supertext:unsavedChanges')
         : null
 
   const toggle = (code: string) =>
@@ -86,16 +98,16 @@ export function TranslateButton() {
       })
       const data = (await res.json().catch(() => null)) as (TranslateResponse & { error?: string }) | null
       if (!data?.results) {
-        toast.error(data?.error ?? `Supertext translation failed (HTTP ${res.status}).`)
+        toast.error(data?.error ?? t('supertext:failedHttp', { status: res.status }))
         return
       }
-      reportResults(data.results, targets)
+      reportResults(data.results, targets, t)
       if (data.results.every((r) => r.ok)) {
         setOpen(false)
         setSelected([])
       }
     } catch (err) {
-      toast.error(`Could not reach the server: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(t('supertext:serverUnreachable', { detail: err instanceof Error ? err.message : String(err) }))
     } finally {
       setBusy(false)
     }
@@ -111,12 +123,12 @@ export function TranslateButton() {
         size="medium"
         tooltip={disabledReason ?? undefined}
       >
-        {busy ? 'Translating…' : 'Translate'}
+        {busy ? t('supertext:translating') : t('supertext:translate')}
       </Button>
       {open && (
         <div
           role="dialog"
-          aria-label="Translate with Supertext"
+          aria-label={t('supertext:dialogTitle')}
           style={{
             background: 'var(--theme-elevation-0)',
             border: '1px solid var(--theme-elevation-150)',
@@ -130,9 +142,9 @@ export function TranslateButton() {
             zIndex: 50,
           }}
         >
-          <strong style={{ display: 'block', marginBottom: 4 }}>Translate with Supertext</strong>
+          <strong style={{ display: 'block', marginBottom: 4 }}>{t('supertext:dialogTitle')}</strong>
           <p style={{ color: 'var(--theme-elevation-500)', fontSize: 13, margin: '0 0 12px' }}>
-            From <b>{sourceLocale}</b> into:
+            {withBold(t('supertext:fromInto', { locale: MARK }), sourceLocale)}
           </p>
           {targets.map((t) => (
             <label key={t.code} style={{ alignItems: 'center', display: 'flex', gap: 8, marginBottom: 6 }}>
@@ -147,10 +159,10 @@ export function TranslateButton() {
           ))}
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button type="button" disabled={busy} onClick={() => setSelected(targets.map((t) => t.code))} style={linkStyle}>
-              All
+              {t('supertext:all')}
             </button>
             <button type="button" disabled={busy} onClick={() => setSelected([])} style={linkStyle}>
-              None
+              {t('supertext:none')}
             </button>
           </div>
           {disabledReason && (
@@ -166,7 +178,7 @@ export function TranslateButton() {
               onClick={run}
               size="medium"
             >
-              {busy ? 'Translating… (up to a few minutes)' : `Translate into ${selected.length || '…'}`}
+              {busy ? t('supertext:translatingLong') : t('supertext:translateInto', { count: selected.length || '…' })}
             </Button>
           </div>
         </div>
@@ -184,24 +196,42 @@ const linkStyle = {
   textDecoration: 'underline',
 } as const
 
-function labelOf(label: unknown, fallback: string): string {
+type T = (key: SupertextI18nKey, vars?: Record<string, unknown>) => string
+
+/** Placeholder for the source locale, replaced by a bold element after translation. */
+const MARK = '\u0000'
+
+function withBold(text: string, value: string) {
+  const [before, after = ''] = text.split(MARK)
+  return (
+    <>
+      {before}
+      <b>{value}</b>
+      {after}
+    </>
+  )
+}
+
+/** Locale label in the admin language (labels may be `{ en: 'German', de: 'Deutsch' }`). */
+function labelOf(label: unknown, fallback: string, language: string): string {
   if (typeof label === 'string') return label
   if (label && typeof label === 'object') {
-    const first = Object.values(label as Record<string, unknown>)[0]
-    if (typeof first === 'string') return first
+    const labels = label as Record<string, unknown>
+    const value = labels[language] ?? Object.values(labels)[0]
+    if (typeof value === 'string') return value
   }
   return fallback
 }
 
-function reportResults(results: LocaleResult[], targets: { code: string; label: string }[]) {
+function reportResults(results: LocaleResult[], targets: { code: string; label: string }[], t: T) {
   const name = (code: string) => targets.find((t) => t.code === code)?.label ?? code
   const ok = results.filter((r) => r.ok)
   const failed = results.filter((r): r is Extract<LocaleResult, { ok: false }> => !r.ok)
   if (ok.length > 0) {
     const partial = ok.filter((r) => r.ok && r.missing.length > 0)
     toast.success(
-      `Translated into ${ok.map((r) => name(r.locale)).join(', ')}.` +
-        (partial.length > 0 ? ' Some passages came back empty and kept the source text — please review.' : ''),
+      t('supertext:translatedInto', { locales: ok.map((r) => name(r.locale)).join(', ') }) +
+        (partial.length > 0 ? ` ${t('supertext:partlyEmpty')}` : ''),
     )
   }
   for (const f of failed) toast.error(`${name(f.locale)}: ${f.error}`)

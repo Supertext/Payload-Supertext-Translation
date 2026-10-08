@@ -1,6 +1,7 @@
 import type { Endpoint, PayloadRequest } from 'payload'
 
 import { SupertextClient, SUPERTEXT_ENVIRONMENTS } from './supertext/client.js'
+import { translate } from './i18n.js'
 import { translateDocument } from './translate.js'
 import type { SupertextTranslationOptions, TranslateRequestBody, TranslateResponse } from './types.js'
 
@@ -46,7 +47,7 @@ export function createEndpoints(options: SupertextTranslationOptions): Endpoint[
     {
       // Lets the admin panel show whether the plugin is usable before an editor clicks.
       handler: async (req) => {
-        if (!req.user) return error(401, 'Not logged in.')
+        if (!req.user) return error(401, translate(req, 'notLoggedIn'))
         return Response.json({
           apiKeyConfigured: resolveApiKey(options) !== '',
           canTranslate: await canTranslate(req),
@@ -58,16 +59,12 @@ export function createEndpoints(options: SupertextTranslationOptions): Endpoint[
     },
     {
       handler: async (req) => {
-        if (!req.user) return error(401, 'Not logged in.')
-        if (!(await canTranslate(req))) return error(403, 'You are not allowed to start Supertext translations.')
-        if (resolveApiKey(options) === '') {
-          return error(500, 'No Supertext API key is configured. Set SUPERTEXT_API_KEY or the plugin apiKey option. ' +
-              'No Supertext account yet? Create one at https://www.supertext.com/person/en/account/signin. ' +
-              'Generate your API key at https://www.supertext.com/en/integrations/api (requires the Admin role).')
-        }
+        if (!req.user) return error(401, translate(req, 'notLoggedIn'))
+        if (!(await canTranslate(req))) return error(403, translate(req, 'notAllowed'))
+        if (resolveApiKey(options) === '') return error(500, translate(req, 'apiKeyMissing'))
 
         const locales = localeCodes(req)
-        if (locales.length === 0) return error(400, 'Localization is not enabled in the Payload config.')
+        if (locales.length === 0) return error(400, translate(req, 'localizationDisabled'))
 
         const body = (await readBody(req)) as Partial<TranslateRequestBody> | null
         if (!body || typeof body !== 'object') return error(400, 'Expected a JSON body.')

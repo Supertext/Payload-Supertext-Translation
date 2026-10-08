@@ -1,5 +1,9 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
+import { de } from '@payloadcms/translations/languages/de'
+import { en } from '@payloadcms/translations/languages/en'
+import { fr } from '@payloadcms/translations/languages/fr'
+import { it } from '@payloadcms/translations/languages/it'
 import path from 'path'
 import { buildConfig } from 'payload'
 import { supertextTranslation } from 'payload-supertext-translation'
@@ -29,6 +33,8 @@ export default buildConfig({
   }),
   editor: lexicalEditor(),
   globals: [Header],
+  // Admin interface languages (Account → Language); the Supertext plugin brings its own strings for these.
+  i18n: { fallbackLanguage: 'en', supportedLanguages: { de, en, fr, it } },
   localization: {
     defaultLocale: 'en',
     // "Publish" publishes only the language being viewed, so each translation is

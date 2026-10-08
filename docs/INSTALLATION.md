@@ -108,6 +108,24 @@ supertextTranslation({
 })
 ```
 
+### Interface languages
+
+The Translate control and the plugin's messages are available in English, German, French and Italian and follow each user's Payload admin language. The plugin adds its strings to `i18n.translations` (namespace `supertext`); languages it has no strings for show English. Payload only offers the admin languages listed in `i18n.supportedLanguages` (default: English only):
+
+```ts
+import { de } from '@payloadcms/translations/languages/de'
+import { en } from '@payloadcms/translations/languages/en'
+import { fr } from '@payloadcms/translations/languages/fr'
+import { it } from '@payloadcms/translations/languages/it'
+
+export default buildConfig({
+  i18n: { fallbackLanguage: 'en', supportedLanguages: { de, en, fr, it } },
+  // ...
+})
+```
+
+Each user then picks the language under *Account* → *Language* (Payload also follows the browser's language on first visit). To reword a string, define it in your own `i18n.translations`, e.g. `{ de: { supertext: { translate: 'Übersetzen lassen' } } }`; your strings win. The interface language is independent of the content locales above.
+
 ## All settings
 
 | Option | Default | Description |

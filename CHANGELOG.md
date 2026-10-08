@@ -4,6 +4,14 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added
+
+- French and Italian interface (and German where it was missing): the Translate control, its messages and the endpoints' errors follow the user's Payload admin language (English, German, French, Italian; other languages show English). Strings are merged into `i18n.translations` under the `supertext` namespace and can be overridden there. The demo offers all four admin languages.
+
+### Changed
+
+- The *Authentication failure* message now links to Supertext account signup and API key generation.
+
 ## [0.1.0] - 2026-10-07
 
 ### Changed

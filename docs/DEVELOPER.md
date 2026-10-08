@@ -13,6 +13,8 @@ src/
   lexical.ts               Lexical inline content <-> inline HTML (one segment per paragraph)
   languages.ts             Payload locale → Supertext code (target keeps region, source = primary subtag)
   supertext/client.ts      Supertext AI file API v1 client (fetch-based, no Payload dependency)
+  translations.ts          UI and error strings in en/de/fr/it (namespace `supertext`)
+  i18n.ts                  merges them into config.i18n.translations; req.t()-based messages for the endpoints
   components/TranslateButton.tsx   client component in the edit view header
   exports/client.ts        'payload-supertext-translation/client' entry (import map)
 demo/                      demo Payload site (Next.js), deployed to Railway — see "Demo app"
@@ -51,6 +53,14 @@ demo/                      demo Payload site (Next.js), deployed to Railway — 
 - Earlier versions sent every text node as its own `<span data-st-id>`. The live API translates each `data-st-id` element on its own, which broke sentences at formatting boundaries (lower-case sentence starts, text moved outside spans), so don't go back to that.
 - Plain fields: leading/trailing whitespace is stored on the segment and re-applied.
 - A segment missing or empty in the response keeps its source text and is reported in `missing` (logged as a warning, surfaced to the editor).
+
+### Interface strings
+
+All strings the plugin shows live in `src/translations.ts` (`en`, `de`, `fr`, `it`). `withSupertextTranslations` (in `src/i18n.ts`) merges them into `config.i18n.translations` under the `supertext` namespace: each language gets its own strings, every other supported language gets English, and strings the project defines itself win. The client component reads them with `useTranslation()` (`t('supertext:translate')`); the endpoints and `translateDocument` use the request's `req.t` through `translate(req, key)` and `errorMessage(req, err)`, so editors get server messages in their admin language too. Placeholders use Payload's `{{name}}` syntax.
+
+`SupertextError.message` stays English (logs, API clients). UIs translate `code` (`error_<code>` keys) and append `detail`, the API's own text. The client file is shared with the Directus plugin; port changes both ways.
+
+New or changed strings need all four languages in the same commit: formal address (Sie, vous, Lei), Payload's own terms (*Dokument*/*document*/*documento*, *Entwurf*/*brouillon*/*bozza*), "Supertext", `{{placeholders}}` and URLs unchanged. `test/translations.test.ts` checks keys, placeholders and URLs.
 
 ## Supertext API protocol
 
@@ -99,6 +109,7 @@ Vitest, in `test/`:
 - `segments.test.ts` — HTML build/parse, escaping, whitespace, missing segments
 - `collect.test.ts` — schema walking for every supported field type, Lexical grouping, row-id rules, opt-outs
 - `client.test.ts` — API round trip, form fields, status and HTTP error mapping, timeout, language codes
+- `translations.test.ts` — all four languages have the English keys, placeholders and URLs; every key the control and endpoints use and every `SupertextErrorCode` has a message; config merging; French messages through Payload's own `initI18n`
 - `integration.test.ts` — boots a real Payload 3 instance on in-memory SQLite with Lexical, drafts, arrays, blocks and a global; covers translating into several locales, drafts, globals, failures and the endpoint (auth, validation, happy path)
 
 `test/fakeSupertext.ts` is an in-memory Supertext API that "translates" by prefixing `[<target_lang>]`. No test calls the real API.
@@ -113,6 +124,7 @@ A small Payload 3 + Next.js 16 site that uses the plugin the way a customer woul
 
 - `src/seed.ts` runs on every start: creates the demo accounts from `DEMO_ADMIN_EMAIL`/`DEMO_ADMIN_PASSWORD` (fallback: `PAYLOAD_ADMIN_*`) and `DEMO_EDITOR_EMAIL`/`DEMO_EDITOR_PASSWORD` if they don't exist yet — existing accounts are never changed, and the demo has no roles, so both accounts have full access — and English sample content when there are no pages. With an account variable set, Payload's "create first user" screen no longer appears.
 - Schema changes need a migration: `cd demo && npm run payload migrate:create <name>`, commit `src/migrations/`. Production applies them on start (`prodMigrations`); there is no automatic schema push in production.
+- `i18n.supportedLanguages` offers English, German, French and Italian as admin languages.
 - `localization.defaultLocalePublishOption: 'active'` makes **Publish** release only the language being viewed (see "Publishing" in the user guide).
 
 Run locally:

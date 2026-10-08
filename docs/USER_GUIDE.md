@@ -4,6 +4,8 @@ For editors working in the Payload admin panel.
 
 *Screenshots: the demo site in this repository (Payload 3.90).*
 
+The Translate control and its messages follow your Payload admin language (English, German, French or Italian; change it under *Account* → *Language*).
+
 ## Translate a document
 
 1. Open the page, post or global you want to translate.

@@ -1,6 +1,7 @@
 import type { Config, CustomComponent } from 'payload'
 
 import { createEndpoints } from './endpoints.js'
+import { withSupertextTranslations } from './i18n.js'
 import type { SupertextTranslationOptions } from './types.js'
 
 export { collectSegments, isOptedOut } from './collect.js'
@@ -10,6 +11,8 @@ export { applyTranslations, buildHtml, parseHtml } from './segments.js'
 export { SUPERTEXT_ENVIRONMENTS, SupertextClient, SupertextError } from './supertext/client.js'
 export type { Politeness, SupertextEnvironment, SupertextErrorCode } from './supertext/client.js'
 export { translateDocument } from './translate.js'
+export { SUPERTEXT_I18N_NAMESPACE, supertextTranslations } from './translations.js'
+export type { SupertextTranslationKey } from './translations.js'
 export type {
   LocaleResult,
   SupertextTranslationOptions,
@@ -61,6 +64,7 @@ export const supertextTranslation =
           : collection,
       ),
       endpoints: [...(incoming.endpoints ?? []), ...createEndpoints(options)],
+      i18n: withSupertextTranslations(incoming.i18n),
       globals: (incoming.globals ?? []).map((global) =>
         globalSlugs.has(global.slug)
           ? {
