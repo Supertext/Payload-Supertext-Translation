@@ -58,7 +58,7 @@
     "react": "^19.0.0"
   },
   "dependencies": {
-    "node-html-parser": "^7.1.0"
+    "node-html-parser": "^9.0.4"
   },
   "devDependencies": {
     "@payloadcms/db-sqlite": "^3.90.2",
