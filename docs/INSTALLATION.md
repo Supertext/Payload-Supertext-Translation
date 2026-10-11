@@ -96,14 +96,18 @@ The languages offered in the Translate menu are your Payload locales (`localizat
 
 <img src="images/locales.png" alt="Payload locale selector: English (en), Deutsch (Schweiz) (de-CH), Français (Suisse) (fr-CH), Italiano (Svizzera) (it-CH)" width="520">
 
-Payload locale codes are sent to Supertext as-is, so BCP-47 codes such as `en`, `de`, `de-CH`, `fr-FR`, `pt-BR` need no setup. The source language is always sent as its primary subtag (`de-CH` → `de`), because Supertext rejects regional source codes.
+Payload locale codes become Supertext codes automatically, so BCP-47 codes such as `en`, `de`, `de-CH`, `fr_FR`, `pt-BR` need no setup:
 
-If your locale codes are not BCP-47, map them:
+- **Target languages** are always sent with a region, because Supertext rejects bare targets: a locale with a region keeps it (`de-CH`, `fr_ch` → `fr-CH`); a bare one gets the usual default (`de` → `de-DE`, `fr` → `fr-FR`, `it` → `it-IT`, `en` → `en-US`, `pt` → `pt-PT`, `zh` → `zh-CN`, …).
+- **The source language** is sent without region (`de-CH` → `de`), because Supertext rejects regional source codes.
+
+For another region (e.g. Austrian German for the locale `de`), or if your locale codes are not BCP-47, map them with `languageMap`; a mapping wins over the default (for the source, its language is used):
+
 
 ```ts
 supertextTranslation({
   collections: ['pages'],
-  languageMap: { ch: 'de-CH', romand: 'fr-CH' },
+  languageMap: { ch: 'de-CH', romand: 'fr-CH', de: 'de-AT' },
   politeness: { 'de-CH': 'more' }, // formal "Sie"; use 'less' for informal
 })
 ```
@@ -135,7 +139,7 @@ Each user then picks the language under *Account* → *Language* (Payload also f
 | `apiKey` | `process.env.SUPERTEXT_API_KEY` | Supertext API key, with or without the `Supertext-Auth-Key ` prefix. |
 | `environment` | `'live'` | `live`, `staging` or `testing` Supertext API. |
 | `apiUrl` | — | Explicit API base URL (e.g. a proxy). Overrides `environment`. |
-| `languageMap` | `{}` | Payload locale → Supertext language code. |
+| `languageMap` | `{}` | Payload locale → Supertext language code (with region, e.g. `de-AT`). Without an entry, bare locales get a default region (`de` → `de-DE`). |
 | `politeness` | `{}` | Payload locale → `default`, `more` (formal) or `less` (informal). |
 | `skipFieldNames` | `['slug']` | Field names never translated, at any depth. |
 | `saveAsDraft` | `true` | With drafts enabled, translations are saved as a draft for review. Set `false` to save straight into the current version. |

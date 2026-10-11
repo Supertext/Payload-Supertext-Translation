@@ -121,12 +121,12 @@ describe('with a real Payload instance', () => {
     expect(uploads.map((c) => c.form?.get('source_lang'))).toEqual(['en', 'en'])
 
     const fr = await payload.findByID({ collection: 'pages', draft: true, fallbackLocale: false as never, id: page.id, locale: 'fr' })
-    expect(fr.title).toBe('[fr] Home page')
+    expect(fr.title).toBe('[fr-FR] Home page')
     expect(fr.slug).toBeFalsy() // skipped by default
-    expect(JSON.stringify(fr.body)).toContain('[fr] Hello world')
-    expect(fr.links?.[0]?.label).toBe('[fr] Home')
-    expect(fr.faq?.[0]?.q).toBe('[fr] Why?')
-    expect(fr.layout?.[0]?.heading).toBe('[fr] Welcome')
+    expect(JSON.stringify(fr.body)).toContain('[fr-FR] Hello world')
+    expect(fr.links?.[0]?.label).toBe('[fr-FR] Home')
+    expect(fr.faq?.[0]?.q).toBe('[fr-FR] Why?')
+    expect(fr.layout?.[0]?.heading).toBe('[fr-FR] Welcome')
     expect(fr.code).toBe('P-1')
 
     const de = await payload.findByID({ collection: 'pages', draft: true, fallbackLocale: false as never, id: page.id, locale: 'de-CH' })
@@ -158,7 +158,7 @@ describe('with a real Payload instance', () => {
     const published = await payload.findByID({ collection: 'pages', draft: false, fallbackLocale: false as never, id: page.id, locale: 'fr' })
     const draft = await payload.findByID({ collection: 'pages', draft: true, fallbackLocale: false as never, id: page.id, locale: 'fr' })
     expect(published.title).toBeFalsy()
-    expect(draft.title).toBe('[fr] Published')
+    expect(draft.title).toBe('[fr-FR] Published')
   })
 
   it('translates globals', async () => {
@@ -173,7 +173,7 @@ describe('with a real Payload instance', () => {
     })
     expect(results[0]).toMatchObject({ ok: true, segments: 1 })
     const header = await payload.findGlobal({ fallbackLocale: false as never, locale: 'fr', slug: 'header' })
-    expect(header.tagline).toBe('[fr] Swiss quality')
+    expect(header.tagline).toBe('[fr-FR] Swiss quality')
   })
 
   it('reports a failing locale without throwing', async () => {

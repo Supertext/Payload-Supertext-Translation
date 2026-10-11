@@ -74,9 +74,20 @@ AI file translation API v1, same as the WordPress plugin. Base URLs: `https://ap
 | Delete | `DELETE translate/ai/file/{id}` | Best effort, always attempted; files expire after 24 h. |
 | Key check | `GET features` | Cost-free (`SupertextClient.validateApiKey`, not yet wired to the UI). |
 
-`source_lang` must be a primary subtag (`de`, not `de-CH`) or Supertext answers `INVALID_LANGUAGE_PAIR`; `target_lang` keeps its region. HTTP errors map to `SupertextError` codes: 401/403 `authentication_failure`, 404 `not_found`, 413 `payload_too_large`, 429 `too_many_requests`, 500/502/503 `service_unavailable`, otherwise `unexpected_status`; the first 200 characters of the response body are appended to the message.
+Language codes: see *Language codes* below. HTTP errors map to `SupertextError` codes: 401/403 `authentication_failure`, 404 `not_found`, 413 `payload_too_large`, 429 `too_many_requests`, 500/502/503 `service_unavailable`, otherwise `unexpected_status`; the first 200 characters of the response body are appended to the message.
 
 **Rate limit:** the API limits requests per second per key (HTTP 429, `RATE_LIMIT_EXCEEDED`); translating into several languages at once hits it. The client retries a 429 up to 4 times, waiting for `Retry-After` if sent, otherwise 1, 2, 4 and 8 seconds (plus jitter), before reporting *Too many requests*.
+
+### Language codes
+
+Supertext's rule (from testing the live API): **source = bare language** (`en`, `de`), **target = regional code** (`de-DE`, `fr-CH`, `en-US`). A regional source or a bare target is rejected with `INVALID_LANGUAGE_PAIR`. Translating within one language (source `en`, target `en-GB`) is allowed.
+
+`src/languages.ts` (shared with the Directus plugin; port changes both ways) turns locales into codes:
+
+- `targetCode(locale, languageMap)`: the `languageMap` entry wins, else the locale. The code is normalized (`de_ch`/`de-ch` → `de-CH`; scripts and numeric regions keep their form: `zh-Hant`, `es-419`). A bare language gets its default region from `DEFAULT_REGIONS`: ar→ar-SA, bg→bg-BG, cs→cs-CZ, da→da-DK, de→de-DE, el→el-GR, en→en-US, es→es-ES, et→et-EE, fi→fi-FI, fr→fr-FR, hr→hr-HR, hu→hu-HU, it→it-IT, ja→ja-JP, ko→ko-KR, lt→lt-LT, lv→lv-LV, nb→nb-NO, nl→nl-NL, pl→pl-PL, pt→pt-PT, ro→ro-RO, ru→ru-RU, sk→sk-SK, sl→sl-SI, sr→sr-RS, sv→sv-SE, th→th-TH, tr→tr-TR, uk→uk-UA, vi→vi-VN, zh→zh-CN (same table as the other Supertext plugins). Unknown bare codes are sent unchanged, so Supertext's error names them.
+- `sourceCode(locale, languageMap)`: the language of the mapped code or locale (`de-CH` → `de`).
+
+The test stand-in (`test/fakeSupertext.ts`) rejects bare targets and regional sources like the real API.
 
 ## Endpoints
 

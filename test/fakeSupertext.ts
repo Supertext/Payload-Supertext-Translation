@@ -5,6 +5,7 @@ export type Call = { method: string; url: string; form?: FormData }
 /**
  * In-memory stand-in for the Supertext AI file API. "Translates" by prefixing every
  * segment with `[<target_lang>] `. `statuses` scripts the status sequence per file.
+ * Like the real API, it rejects bare targets (`de`) and regional sources (`de-CH`).
  */
 export function fakeSupertext(opts: { statuses?: string[]; drop?: number[]; failStatus?: number; rateLimited?: number } = {}) {
   const calls: Call[] = []
@@ -27,9 +28,14 @@ export function fakeSupertext(opts: { statuses?: string[]; drop?: number[]; fail
     }
 
     if (method === 'POST' && url.endsWith('translate/ai/file')) {
+      const target = String(form?.get('target_lang') ?? '')
+      const source = form?.get('source_lang')
+      if (!target.includes('-') || (typeof source === 'string' && source.includes('-'))) {
+        return new Response('{"error_code":"INVALID_LANGUAGE_PAIR"}', { status: 400 })
+      }
       const file = form?.get('file') as Blob
       const id = `f${++n}`
-      files.set(id, { html: await file.text(), polls: 0, target: String(form?.get('target_lang')) })
+      files.set(id, { html: await file.text(), polls: 0, target })
       return Response.json({ file_id: id })
     }
     const m = url.match(/translate\/ai\/file\/([^/]+)(\/status|\/translation)?$/)
