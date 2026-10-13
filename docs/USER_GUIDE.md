@@ -69,6 +69,7 @@ Translating again overwrites the earlier translation of the translated fields in
 | *No Supertext API key is configured.* | Ask your administrator to set up the Supertext key (the [Installation guide](INSTALLATION.md#api-key) explains how to get one). |
 | *Some passages came back empty and kept the source text* | Supertext returned nothing for a few passages; check them in the translated language. |
 | *Authentication failure…* | The Supertext key is invalid. Ask your administrator. |
+| *Supertext does not support this language pair…* | One of the languages isn't one Supertext translates. Ask your administrator to check the language codes. |
 | *Your Supertext translation limit is exceeded…* | The company's Supertext quota is used up. |
 | *Timed out waiting…* | The document is very long or Supertext is slow. Try again, or ask your administrator to raise the timeout. |
 | *Too many requests…* | Wait a moment and try again. |

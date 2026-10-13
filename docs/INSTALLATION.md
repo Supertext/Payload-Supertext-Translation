@@ -193,7 +193,7 @@ The plugin adds no collections or fields, so no migration is needed. Translation
 | "No Supertext API key is configured" | Set `SUPERTEXT_API_KEY` on the server and restart. No key yet? See [API key](#api-key) (account signup and key generation, Admin role required). |
 | "Authentication failure" | The key is wrong or for another environment (`live` vs `staging`). Generate a new one at <https://www.supertext.com/en/integrations/api> (Admin role required). |
 | "Your Supertext translation limit is exceeded" | The Supertext subscription quota is used up. |
-| `INVALID_LANGUAGE_PAIR` in the error | The target code isn't a language Supertext supports; add a `languageMap` entry. |
+| "Supertext does not support this language pair" | The target code isn't a language Supertext supports; add a `languageMap` entry. The detail shows the codes that were sent. |
 | "Timed out waiting…" | Very long document or slow service; raise `timeoutMs` (and the platform's request timeout). |
 | "Collection … is not enabled" | The endpoint only accepts slugs listed in the options. |
 

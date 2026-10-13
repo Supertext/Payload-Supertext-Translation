@@ -11,8 +11,10 @@ src/
   collect.ts               walks the field schema + document; returns Segments and the update payload
   segments.ts              Segment type, HTML build/parse, applying translations
   lexical.ts               Lexical inline content <-> inline HTML (one segment per paragraph)
-  languages.ts             Payload locale → Supertext code (target keeps region, source = primary subtag)
-  supertext/client.ts      Supertext AI file API v1 client (fetch-based, no Payload dependency)
+  languages.ts             Payload locale → Supertext code (the SDK's LanguageCodes)
+  supertext/client.ts      the plugin's Supertext client on top of the Supertext SDK (no Payload dependency)
+  vendor/supertext-sdk/    Supertext SDK sources (TypeScript), compiled with the plugin; see *Supertext SDK*
+scripts/vendor-sdk.sh      updates src/vendor/supertext-sdk
   translations.ts          UI and error strings in en/de/fr/it (namespace `supertext`)
   i18n.ts                  merges them into config.i18n.translations; req.t()-based messages for the endpoints
   components/TranslateButton.tsx   client component in the edit view header
@@ -58,33 +60,45 @@ demo/                      demo Payload site (Next.js), deployed to Railway — 
 
 All strings the plugin shows live in `src/translations.ts` (`en`, `de`, `fr`, `it`). `withSupertextTranslations` (in `src/i18n.ts`) merges them into `config.i18n.translations` under the `supertext` namespace: each language gets its own strings, every other supported language gets English, and strings the project defines itself win. The client component reads them with `useTranslation()` (`t('supertext:translate')`); the endpoints and `translateDocument` use the request's `req.t` through `translate(req, key)` and `errorMessage(req, err)`, so editors get server messages in their admin language too. Placeholders use Payload's `{{name}}` syntax.
 
-`SupertextError.message` stays English (logs, API clients). UIs translate `code` (`error_<code>` keys) and append `detail`, the API's own text. The client file is shared with the Directus plugin; port changes both ways.
+`SupertextError.message` stays English (logs, API clients). UIs translate `code` (`error_<code>` keys) and append `detail`, the API's own text.
 
 New or changed strings need all four languages in the same commit: formal address (Sie, vous, Lei), Payload's own terms (*Dokument*/*document*/*documento*, *Entwurf*/*brouillon*/*bozza*), "Supertext", `{{placeholders}}` and URLs unchanged. `test/translations.test.ts` checks keys, placeholders and URLs.
 
 ## Supertext API protocol
 
-AI file translation API v1, same as the WordPress plugin. Base URLs: `https://api.supertext.com/v1/` (live), `https://api.staging.supertext.com/v1/`, `https://api.testing.supertext.com/v1/`. Header `Authorization: Supertext-Auth-Key <key>`, `Accept: application/json`. The key may be configured with or without the `Supertext-Auth-Key ` prefix; the client strips it and always sends exactly one. The header name must be `Authorization` (the live API answers 403 to `Authentication`).
+AI file translation API v1, same as the WordPress plugin and every other Supertext plugin, done by the Supertext SDK. Base URLs: `https://api.supertext.com/v1/` (live), `https://api.staging.supertext.com/v1/`, `https://api.testing.supertext.com/v1/`. Header `Authorization: Supertext-Auth-Key <key>`; the key may be configured with or without the `Supertext-Auth-Key ` prefix, exactly one is sent.
 
 | Step | Request | Notes |
 | --- | --- | --- |
 | Upload | `POST translate/ai/file` multipart: `file` (`content.html`, type exactly `text/html`), `target_lang`, optional `source_lang`, optional `politeness` (`more`/`less`) | Returns `{ file_id }`. A `; charset=` suffix on the part type is rejected with 415. Up to 1,000,000 characters per file. |
 | Poll | `GET translate/ai/file/{id}/status` | `translating` → keep polling; `done`; `error`; `limit_exceeded`; `deleted`. |
 | Download | `GET translate/ai/file/{id}/translation` | Translated HTML. |
-| Delete | `DELETE translate/ai/file/{id}` | Best effort, always attempted; files expire after 24 h. |
+| Delete | `DELETE translate/ai/file/{id}` | Always attempted, also after errors; files expire after 24 h. |
 | Key check | `GET features` | Cost-free (`SupertextClient.validateApiKey`, not yet wired to the UI). |
 
-Language codes: see *Language codes* below. HTTP errors map to `SupertextError` codes: 401/403 `authentication_failure`, 404 `not_found`, 413 `payload_too_large`, 429 `too_many_requests`, 500/502/503 `service_unavailable`, otherwise `unexpected_status`; the first 200 characters of the response body are appended to the message.
+Errors are the SDK's `SupertextError` with a stable `code`: `missing_api_key`, `authentication_failure` (401/403), `invalid_language_pair` (400 `INVALID_LANGUAGE_PAIR`), `not_found` (404), `payload_too_large` (413), `too_many_requests` (429), `service_unavailable` (5xx), `unexpected_status`, `transport_error`, `no_file_id`, `translation_error`, `quota_exceeded`, `file_deleted`, `timeout`, `incomplete_response`; `detail` carries the API's own text (at most 200 characters). Each code has an `error_<code>` message in all four languages. The API key never appears in messages.
 
-**Rate limit:** the API limits requests per second per key (HTTP 429, `RATE_LIMIT_EXCEEDED`); translating into several languages at once hits it. The client retries a 429 up to 4 times, waiting for `Retry-After` if sent, otherwise 1, 2, 4 and 8 seconds (plus jitter), before reporting *Too many requests*.
+**Rate limit:** the API limits requests per second per key (HTTP 429, `RATE_LIMIT_EXCEEDED`); translating into several languages at once hits it. A 429 is retried up to 4 times, waiting for `Retry-After` if sent, otherwise 1, 2, 4 and 8 seconds (plus jitter, at most 30 s), before reporting *Too many requests*.
+
+### Supertext SDK
+
+All Supertext calls go through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`), the shared client of all Supertext plugins. Its TypeScript sources are copied into `src/vendor/supertext-sdk/` and compiled with the plugin into `dist/vendor/supertext-sdk/`, so sites install nothing besides the plugin; `COMMIT` and `VERSION` name the SDK commit and version. Never edit the copy: fix the SDK repository and copy it again:
+
+```bash
+scripts/vendor-sdk.sh                  # latest main of the SDK repository
+scripts/vendor-sdk.sh <commit-or-tag>
+SDK_DIR=../Supertext-API-SDK-and-Guide scripts/vendor-sdk.sh   # a local clone
+```
+
+Then run typecheck, tests and build, and note the update in `CHANGELOG.md`. `src/supertext/client.ts` wraps the SDK client (options in milliseconds, a `fetch` for tests, the User-Agent `supertext-sdk-typescript payload-supertext-translation`) and keeps the plugin's exported `SupertextClient`, `SupertextError` and `SUPERTEXT_ENVIRONMENTS`.
 
 ### Language codes
 
 Supertext's rule (from testing the live API): **source = bare language** (`en`, `de`), **target = regional code** (`de-DE`, `fr-CH`, `en-US`). A regional source or a bare target is rejected with `INVALID_LANGUAGE_PAIR`. Translating within one language (source `en`, target `en-GB`) is allowed.
 
-`src/languages.ts` (shared with the Directus plugin; port changes both ways) turns locales into codes:
+`src/languages.ts` turns locales into codes with the SDK's `LanguageCodes`:
 
-- `targetCode(locale, languageMap)`: the `languageMap` entry wins, else the locale. The code is normalized (`de_ch`/`de-ch` → `de-CH`; scripts and numeric regions keep their form: `zh-Hant`, `es-419`). A bare language gets its default region from `DEFAULT_REGIONS`: ar→ar-SA, bg→bg-BG, cs→cs-CZ, da→da-DK, de→de-DE, el→el-GR, en→en-US, es→es-ES, et→et-EE, fi→fi-FI, fr→fr-FR, hr→hr-HR, hu→hu-HU, it→it-IT, ja→ja-JP, ko→ko-KR, lt→lt-LT, lv→lv-LV, nb→nb-NO, nl→nl-NL, pl→pl-PL, pt→pt-PT, ro→ro-RO, ru→ru-RU, sk→sk-SK, sl→sl-SI, sr→sr-RS, sv→sv-SE, th→th-TH, tr→tr-TR, uk→uk-UA, vi→vi-VN, zh→zh-CN (same table as the other Supertext plugins). Unknown bare codes are sent unchanged, so Supertext's error names them.
+- `targetCode(locale, languageMap)`: the `languageMap` entry wins, else the locale. The code is normalized (`de_ch`/`de-ch` → `de-CH`; scripts and numeric regions keep their form: `zh-Hant`, `es-419`). A bare language gets its default region from the SDK's `DEFAULT_REGIONS` (de→de-DE, en→en-US, fr→fr-FR, it→it-IT, pt→pt-PT, zh→zh-CN, …; the same table in every Supertext plugin). Unknown bare codes are sent unchanged, so Supertext's error names them.
 - `sourceCode(locale, languageMap)`: the language of the mapped code or locale (`de-CH` → `de`).
 
 The test stand-in (`test/fakeSupertext.ts`) rejects bare targets and regional sources like the real API.
@@ -119,8 +133,8 @@ Vitest, in `test/`:
 
 - `segments.test.ts` — HTML build/parse, escaping, whitespace, missing segments
 - `collect.test.ts` — schema walking for every supported field type, Lexical grouping, row-id rules, opt-outs
-- `client.test.ts` — API round trip, form fields, status and HTTP error mapping, timeout, language codes
-- `translations.test.ts` — all four languages have the English keys, placeholders and URLs; every key the control and endpoints use and every `SupertextErrorCode` has a message; config merging; French messages through Payload's own `initI18n`
+- `client.test.ts` — the plugin's client on the SDK: API round trip, form fields, status and HTTP error mapping, timeout, 429 retries, key prefix, language codes (the SDK's own tests run in the SDK repository)
+- `translations.test.ts` — all four languages have the English keys, placeholders and URLs; every key the control and endpoints use and every error code of the SDK has a message; config merging; French messages through Payload's own `initI18n`
 - `integration.test.ts` — boots a real Payload 3 instance on in-memory SQLite with Lexical, drafts, arrays, blocks and a global; covers translating into several locales, drafts, globals, failures and the endpoint (auth, validation, happy path)
 
 `test/fakeSupertext.ts` is an in-memory Supertext API that "translates" by prefixing `[<target_lang>]`. No test calls the real API.

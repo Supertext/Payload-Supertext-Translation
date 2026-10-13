@@ -6,7 +6,8 @@ import { fr } from '@payloadcms/translations/languages/fr'
 import { describe, expect, it } from 'vitest'
 
 import { errorMessage, withSupertextTranslations } from '../src/i18n.js'
-import { statusError, SupertextError } from '../src/supertext/client.js'
+import { SupertextError } from '../src/supertext/client.js'
+import { ErrorCode, errorForStatus as statusError } from '../src/vendor/supertext-sdk/index.js'
 import { supertextTranslations } from '../src/translations.js'
 
 const src = (file: string) => readFileSync(join(__dirname, '../src', file), 'utf8')
@@ -43,8 +44,8 @@ describe('plugin translations', () => {
   })
 
   it('has a message for every Supertext error code', () => {
-    const union = src('supertext/client.ts').match(/export type SupertextErrorCode =([\s\S]*?)\n\n/)![1]!
-    const codes = [...union.matchAll(/'(\w+)'/g)].map((m) => m[1])
+    // Every error code the Supertext SDK can raise.
+    const codes = Object.values(ErrorCode)
     expect(codes.length).toBeGreaterThan(10)
     for (const code of codes) expect(en, code).toHaveProperty([`error_${code}`])
   })
@@ -77,8 +78,8 @@ describe('errorMessage', () => {
     expect(errorMessage(req, statusError(429, 'slow down'))).toBe(
       'Trop de requêtes vers Supertext. Veuillez réessayer dans un instant. (slow down)',
     )
-    expect(errorMessage(req, statusError(418))).toBe('Supertext a renvoyé un code d’état inattendu : 418.')
-    expect(errorMessage(undefined, new SupertextError('timeout', 'x'))).toBe(en.error_timeout)
+    expect(errorMessage(req, statusError(418, ''))).toBe('Supertext a renvoyé un code d’état inattendu : 418.')
+    expect(errorMessage(undefined, new SupertextError('timeout'))).toBe(en.error_timeout)
     expect(errorMessage(req, new Error('Validation failed'))).toBe('Validation failed')
   })
 })

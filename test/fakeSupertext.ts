@@ -16,7 +16,13 @@ export function fakeSupertext(opts: { statuses?: string[]; drop?: number[]; fail
   const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
-    const form = init?.body instanceof FormData ? init.body : undefined
+    // The SDK builds the multipart body itself; read it back as FormData.
+    const contentType = new Headers(init?.headers).get('Content-Type') ?? ''
+    const form = init?.body instanceof FormData
+      ? init.body
+      : contentType.startsWith('multipart/form-data') && init?.body
+        ? await new Response(init.body as BodyInit, { headers: { 'Content-Type': contentType } }).formData()
+        : undefined
     calls.push({ form, method, url })
 
     const auth = new Headers(init?.headers).get('Authorization')
@@ -38,6 +44,7 @@ export function fakeSupertext(opts: { statuses?: string[]; drop?: number[]; fail
       files.set(id, { html: await file.text(), polls: 0, target })
       return Response.json({ file_id: id })
     }
+    if (method === 'GET' && url.endsWith('/features')) return Response.json({})
     const m = url.match(/translate\/ai\/file\/([^/]+)(\/status|\/translation)?$/)
     const f = m ? files.get(m[1] as string) : undefined
     if (!m || !f) return new Response('not found', { status: 404 })

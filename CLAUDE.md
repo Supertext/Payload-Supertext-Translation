@@ -84,6 +84,7 @@ AI file translation API v1, same as the WordPress plugin: POST HTML file → pol
 - `npm test` (Vitest; includes a real Payload instance on in-memory SQLite), `npm run typecheck`, `npm run build`. All three must pass before committing.
 - New options go in `src/types.ts` **and** the settings table in `docs/INSTALLATION.md`.
 - UI and error strings live in `src/translations.ts` (English, German, French, Italian); add every new string in all four.
+- All Supertext API calls go through the Supertext SDK, whose TypeScript sources are copied into `src/vendor/supertext-sdk` and compiled with the plugin; `src/supertext/client.ts` wraps it. Never edit `src/vendor/`: fix the SDK in `Supertext/Supertext-API-SDK-and-Guide` and run `scripts/vendor-sdk.sh`. Every SDK error code needs an `error_<code>` string in all four languages.
 - Field-walking rules live in `src/collect.ts`; keep the "Field rules" section of `docs/DEVELOPER.md` in sync.
 - `demo/` is the Railway demo site (Dockerfile `demo/Dockerfile`, context = repo root). Changing its collections/globals needs a migration (`cd demo && npm run payload migrate:create <name>`) committed with the change, otherwise the deployed demo won't start. Demo secrets live only in Railway variables.
 - The admin component is referenced by import-map path `payload-supertext-translation/client#TranslateButton`; renaming it is a breaking change for users (they must regenerate the import map).

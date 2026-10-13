@@ -75,7 +75,7 @@ describe('SupertextClient', () => {
     [418, 'unexpected_status'],
   ])('maps HTTP %i', async (status, code) => {
     const fake = fakeSupertext({ failStatus: status })
-    const err = await client(fake).submitFile({ html: 'x', targetLang: 'en-US' }).catch((e) => e)
+    const err = await client(fake).translateHtml({ html: 'x', targetLang: 'en-US' }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SupertextError)
     expect(err).toMatchObject({ code, status })
   })
@@ -120,11 +120,13 @@ describe('language codes', () => {
   })
 })
 
-describe('authHeader', () => {
+describe('API key', () => {
   it('accepts the key with or without the Supertext-Auth-Key prefix', async () => {
-    const { authHeader } = await import('../src/supertext/client.js')
-    expect(authHeader('abc+/=')).toBe('Supertext-Auth-Key abc+/=')
-    expect(authHeader(' Supertext-Auth-Key abc+/= ')).toBe('Supertext-Auth-Key abc+/=')
+    // The fake accepts exactly "Authorization: Supertext-Auth-Key test-key".
+    const fake = fakeSupertext()
+    await client(fake, { apiKey: ' Supertext-Auth-Key test-key ' }).validateApiKey()
+    await client(fake, { apiKey: 'test-key' }).validateApiKey()
+    expect(fake.calls).toHaveLength(2)
   })
 })
 
@@ -148,7 +150,7 @@ describe('rate limiting', () => {
   })
 
   it('honours Retry-After', async () => {
-    const { retryDelayMs } = await import('../src/supertext/client.js')
+    const { retryDelayMs } = await import('../src/vendor/supertext-sdk/index.js')
     expect(retryDelayMs(0, '3')).toBe(3000)
     expect(retryDelayMs(1, null)).toBeGreaterThanOrEqual(2000)
   })

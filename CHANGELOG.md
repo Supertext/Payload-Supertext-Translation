@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Changed
+
+- The connection to Supertext now uses the shared [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (TypeScript SDK 0.1.0), compiled into the plugin, so nothing else needs installing. Translation works as before; an unsupported language pair now has its own message (*Supertext does not support this language pair*) in all four languages, and the file at Supertext is also deleted after errors.
+
 ### Added
 
 - French and Italian interface (and German where it was missing): the Translate control, its messages and the endpoints' errors follow the user's Payload admin language (English, German, French, Italian; other languages show English). Strings are merged into `i18n.translations` under the `supertext` namespace and can be overridden there. The demo offers all four admin languages.
