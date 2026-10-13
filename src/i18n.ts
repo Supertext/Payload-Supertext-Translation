@@ -38,7 +38,8 @@ export function translate(req: PayloadRequest | undefined, key: SupertextTransla
 /** Error message for an editor: Supertext errors by code, with the API's own detail appended. */
 export function errorMessage(req: PayloadRequest | undefined, err: unknown): string {
   if (err instanceof SupertextError) {
-    const text = translate(req, `error_${err.code}`, { status: err.status })
+    const language = err.targetLang ?? err.sourceLang ?? ''
+    const text = translate(req, `error_${err.code}`, { language, status: err.status })
     return err.detail ? `${text} (${err.detail})` : text
   }
   return err instanceof Error ? err.message : String(err)

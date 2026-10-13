@@ -6,6 +6,8 @@
 #
 #   scripts/vendor-sdk.sh [commit-or-branch]        (default: main)
 #   SDK_DIR=/path/to/clone scripts/vendor-sdk.sh    (use a local clone as it is)
+#
+# Import the API from src/vendor/supertext-sdk/v1/index.js (the SDK's `supertext-sdk/v1`).
 set -euo pipefail
 ref="${1:-main}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -23,7 +25,8 @@ version="$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$src/sdk/typescript/package
 dest="$root/src/vendor/supertext-sdk"
 rm -rf "$dest"
 mkdir -p "$dest"
-cp "$src"/sdk/typescript/src/*.ts "$dest/"
+# The SDK keeps the API in versioned folders (src/v1/...): copy the whole source tree.
+cp -R "$src"/sdk/typescript/src/. "$dest/"
 cp "$src/sdk/typescript/LICENSE" "$dest/LICENSE"
 printf '%s\n' "$commit" > "$dest/COMMIT"
 printf '%s\n' "$version" > "$dest/VERSION"

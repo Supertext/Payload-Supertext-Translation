@@ -1,9 +1,19 @@
 import type { Endpoint, PayloadRequest } from 'payload'
 
-import { SupertextClient, SUPERTEXT_ENVIRONMENTS } from './supertext/client.js'
 import { translate } from './i18n.js'
+import { politenessFor, supportsPoliteness, targetCodeOrNull } from './languages.js'
+import { Reporting, SDK_VERSION, siteUrl } from './reporting.js'
+import { SupertextClient, SUPERTEXT_ENVIRONMENTS } from './supertext/client.js'
 import { translateDocument } from './translate.js'
-import type { SupertextTranslationOptions, TranslateRequestBody, TranslateResponse } from './types.js'
+import type {
+  KeyCheckStatus,
+  LanguageStatus,
+  StatusResponse,
+  SupertextTranslationOptions,
+  TranslateRequestBody,
+  TranslateResponse,
+} from './types.js'
+import { pluginVersion, releaseUrl } from './versions.js'
 
 export const ENDPOINT_BASE = '/supertext'
 
@@ -11,10 +21,14 @@ export function resolveApiKey(options: SupertextTranslationOptions): string {
   return options.apiKey ?? process.env.SUPERTEXT_API_KEY ?? ''
 }
 
+export function apiBaseUrl(options: SupertextTranslationOptions): string {
+  return options.apiUrl ?? SUPERTEXT_ENVIRONMENTS[options.environment ?? 'live']
+}
+
 export function createClient(options: SupertextTranslationOptions): SupertextClient {
   return new SupertextClient({
     apiKey: resolveApiKey(options),
-    baseUrl: options.apiUrl ?? SUPERTEXT_ENVIRONMENTS[options.environment ?? 'live'],
+    baseUrl: apiBaseUrl(options),
     pollIntervalMs: options.pollIntervalMs,
     timeoutMs: options.timeoutMs,
   })
@@ -36,7 +50,23 @@ async function readBody(req: PayloadRequest): Promise<unknown> {
   }
 }
 
-export function createEndpoints(options: SupertextTranslationOptions): Endpoint[] {
+/** How each locale is sent to Supertext (for the status panel and the dialog). */
+export function languageStatus(locales: string[], options: SupertextTranslationOptions): LanguageStatus[] {
+  return locales.map((locale) => {
+    const supertext = targetCodeOrNull(locale, options.languageMap)
+    const politeness = politenessFor(locale, options.politeness)
+    const supported = supertext === null || politeness === 'default' || supportsPoliteness(supertext) !== false
+    return { locale, politeness, politenessSupported: supported, supertext }
+  })
+}
+
+const publicCheck = (check: KeyCheckStatus | null): KeyCheckStatus | null =>
+  check && { checkedAt: check.checkedAt, errorCode: check.errorCode, httpStatus: check.httpStatus, status: check.status }
+
+export function createEndpoints(
+  options: SupertextTranslationOptions,
+  reporting: Reporting = new Reporting({ apiBaseUrl: apiBaseUrl(options), versionReports: options.versionReports }),
+): Endpoint[] {
   const allowedCollections = new Set<string>(options.collections ?? [])
   const allowedGlobals = new Set<string>(options.globals ?? [])
 
@@ -48,11 +78,23 @@ export function createEndpoints(options: SupertextTranslationOptions): Endpoint[
       // Lets the admin panel show whether the plugin is usable before an editor clicks.
       handler: async (req) => {
         if (!req.user) return error(401, translate(req, 'notLoggedIn'))
-        return Response.json({
-          apiKeyConfigured: resolveApiKey(options) !== '',
+        const apiKey = resolveApiKey(options)
+        reporting.inBackground('onRequest', req, apiKey)
+        const locales = localeCodes(req)
+        const url = siteUrl(req.payload.config.serverURL, req)
+        const version = pluginVersion()
+        const status: StatusResponse = {
+          apiKeyConfigured: apiKey !== '',
           canTranslate: await canTranslate(req),
-          locales: localeCodes(req),
-        })
+          keyCheck: publicCheck(await reporting.lastCheck(req.payload)),
+          languages: languageStatus(locales, options),
+          locales,
+          releaseUrl: releaseUrl(version),
+          reports: { enabled: reporting.enabled, pingUrl: reporting.enabled && url ? reporting.callbackUrl(req.payload, url) : null },
+          sdkVersion: SDK_VERSION,
+          version,
+        }
+        return Response.json(status)
       },
       method: 'get',
       path: `${ENDPOINT_BASE}/status`,
@@ -86,6 +128,7 @@ export function createEndpoints(options: SupertextTranslationOptions): Endpoint[
           return error(400, 'Choose at least one target locale other than the source.')
         }
 
+        reporting.inBackground('onRequest', req, resolveApiKey(options))
         try {
           const results = await translateDocument({
             client: createClient(options),
@@ -98,6 +141,8 @@ export function createEndpoints(options: SupertextTranslationOptions): Endpoint[
             sourceLocale,
             targetLocales,
           })
+          const rejected = results.find((r) => !r.ok && r.code === 'authentication_failure')
+          if (rejected && !rejected.ok) reporting.inBackground('authenticationFailed', req, resolveApiKey(options), rejected.status ?? 401)
           const payload: TranslateResponse = { results }
           return Response.json(payload, { status: results.some((r) => r.ok) ? 200 : 502 })
         } catch (err) {
@@ -108,6 +153,28 @@ export function createEndpoints(options: SupertextTranslationOptions): Endpoint[
       },
       method: 'post',
       path: `${ENDPOINT_BASE}/translate`,
+    },
+    {
+      // "Check again" on the Supertext panel: checks the API key now (cost-free GET features).
+      handler: async (req) => {
+        if (!req.user) return error(401, translate(req, 'notLoggedIn'))
+        if (!(await canTranslate(req))) return error(403, translate(req, 'notAllowed'))
+        const result = await reporting.run('testConnection', req, resolveApiKey(options))
+        const check = result?.check ?? (await createClient(options).checkApiKey())
+        return Response.json({ keyCheck: publicCheck(check) })
+      },
+      method: 'post',
+      path: `${ENDPOINT_BASE}/check-key`,
+    },
+    {
+      // Public: the Supertext Commando Center checks that the site is reachable. No login,
+      // no data; 404 while version reports are off.
+      handler: (req) => {
+        const answer = reporting.ping(req.searchParams?.get('challenge'))
+        return new Response(answer.body, { headers: answer.headers, status: answer.status })
+      },
+      method: 'get',
+      path: `${ENDPOINT_BASE}/ping`,
     },
   ]
 }

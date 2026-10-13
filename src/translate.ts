@@ -2,7 +2,7 @@ import type { Field, Payload, PayloadRequest } from 'payload'
 
 import { collectSegments } from './collect.js'
 import { errorMessage } from './i18n.js'
-import { politenessFor, sourceCode, targetCode } from './languages.js'
+import { politenessForTarget, sourceCode, targetCode } from './languages.js'
 import { applyTranslations, buildHtml, parseHtml } from './segments.js'
 import { SupertextClient, SupertextError } from './supertext/client.js'
 import type { LocaleResult, SupertextTranslationOptions } from './types.js'
@@ -82,11 +82,13 @@ export async function translateDocument(args: TranslateDocumentArgs): Promise<Lo
         })
         if (segments.length === 0) return { locale, missing: [], ok: true, segments: 0 }
 
+        // Unmapped locales and a tone the target lacks fail here, before anything is sent.
+        const targetLang = targetCode(locale, options.languageMap)
         const html = await client.translateHtml({
           html: buildHtml(segments),
-          politeness: politenessFor(locale, options.politeness),
+          politeness: politenessForTarget(locale, targetLang, options.politeness),
           sourceLang: sourceCode(sourceLocale, options.languageMap),
-          targetLang: targetCode(locale, options.languageMap),
+          targetLang,
         })
         const missing = applyTranslations(segments, parseHtml(html))
 
@@ -124,6 +126,7 @@ export async function translateDocument(args: TranslateDocumentArgs): Promise<Lo
           error: errorMessage(req, err),
           locale,
           ok: false,
+          ...(err instanceof SupertextError && err.status !== undefined ? { status: err.status } : {}),
         }
       }
     }),

@@ -4,20 +4,23 @@
 
 ```
 src/
-  index.ts                 plugin factory: adds endpoints + admin component to configured collections/globals
+  index.ts                 plugin factory: adds endpoints, the Translate control and the dashboard panel
   types.ts                 plugin options and endpoint request/response types
-  endpoints.ts             GET /api/supertext/status, POST /api/supertext/translate (auth, validation)
+  endpoints.ts             /api/supertext/status, /translate, /check-key, /ping (auth, validation)
+  reporting.ts             Commando Center glue: site URL, state in payload.kv, when the SDK reporter runs
+  versions.ts              plugin version (its package.json) and Payload version at runtime
   translate.ts             translateDocument(): read source locale → collect → Supertext → write target locales
   collect.ts               walks the field schema + document; returns Segments and the update payload
   segments.ts              Segment type, HTML build/parse, applying translations
   lexical.ts               Lexical inline content <-> inline HTML (one segment per paragraph)
-  languages.ts             Payload locale → Supertext code (the SDK's LanguageCodes)
+  languages.ts             Payload locale → Supertext code (the SDK's Languages, no guessing)
   supertext/client.ts      the plugin's Supertext client on top of the Supertext SDK (no Payload dependency)
   vendor/supertext-sdk/    Supertext SDK sources (TypeScript), compiled with the plugin; see *Supertext SDK*
 scripts/vendor-sdk.sh      updates src/vendor/supertext-sdk
   translations.ts          UI and error strings in en/de/fr/it (namespace `supertext`)
   i18n.ts                  merges them into config.i18n.translations; req.t()-based messages for the endpoints
   components/TranslateButton.tsx   client component in the edit view header
+  components/SupertextStatus.tsx   client component on the dashboard (admin.components.afterDashboard)
   exports/client.ts        'payload-supertext-translation/client' entry (import map)
 demo/                      demo Payload site (Next.js), deployed to Railway — see "Demo app"
 ```
@@ -74,15 +77,15 @@ AI file translation API v1, same as the WordPress plugin and every other Superte
 | Poll | `GET translate/ai/file/{id}/status` | `translating` → keep polling; `done`; `error`; `limit_exceeded`; `deleted`. |
 | Download | `GET translate/ai/file/{id}/translation` | Translated HTML. |
 | Delete | `DELETE translate/ai/file/{id}` | Always attempted, also after errors; files expire after 24 h. |
-| Key check | `GET features` | Cost-free (`SupertextClient.validateApiKey`, not yet wired to the UI). |
+| Key check | `GET features` | Cost-free (`SupertextClient.checkApiKey`, through the SDK reporter; see *Commando Center*). |
 
-Errors are the SDK's `SupertextError` with a stable `code`: `missing_api_key`, `authentication_failure` (401/403), `invalid_language_pair` (400 `INVALID_LANGUAGE_PAIR`), `not_found` (404), `payload_too_large` (413), `too_many_requests` (429), `service_unavailable` (5xx), `unexpected_status`, `transport_error`, `no_file_id`, `translation_error`, `quota_exceeded`, `file_deleted`, `timeout`, `incomplete_response`; `detail` carries the API's own text (at most 200 characters). Each code has an `error_<code>` message in all four languages. The API key never appears in messages.
+Errors are the SDK's `SupertextError` with a stable `code`: `missing_api_key`, `authentication_failure` (401/403), `invalid_language_pair` (404 `INVALID_LANGUAGE_PAIR`), `unsupported_language` (the locale has no Supertext code; nothing sent; `targetLang`/`sourceLang` name it, shown as `{{language}}`), `unsupported_feature` (400 `FEATURE_ERROR`, e.g. politeness for `en-US`), `not_found` (404), `payload_too_large` (413), `too_many_requests` (429), `service_unavailable` (5xx), `unexpected_status`, `transport_error`, `no_file_id`, `translation_error`, `quota_exceeded`, `file_deleted`, `timeout`, `incomplete_response`; `detail` carries the API's own text (at most 200 characters). Each code has an `error_<code>` message in all four languages. The API key never appears in messages.
 
 **Rate limit:** the API limits requests per second per key (HTTP 429, `RATE_LIMIT_EXCEEDED`); translating into several languages at once hits it. A 429 is retried up to 4 times, waiting for `Retry-After` if sent, otherwise 1, 2, 4 and 8 seconds (plus jitter, at most 30 s), before reporting *Too many requests*.
 
 ### Supertext SDK
 
-All Supertext calls go through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`), the shared client of all Supertext plugins. Its TypeScript sources are copied into `src/vendor/supertext-sdk/` and compiled with the plugin into `dist/vendor/supertext-sdk/`, so sites install nothing besides the plugin; `COMMIT` and `VERSION` name the SDK commit and version. Never edit the copy: fix the SDK repository and copy it again:
+All Supertext calls go through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`), the shared client of all Supertext plugins. Its TypeScript sources (the whole `src/` tree, with the API in the versioned folder `v1/`) are copied into `src/vendor/supertext-sdk/` and compiled with the plugin into `dist/vendor/supertext-sdk/`, so sites install nothing besides the plugin; `COMMIT` and `VERSION` name the SDK commit and version. Never edit the copy: fix the SDK repository and copy it again:
 
 ```bash
 scripts/vendor-sdk.sh                  # latest main of the SDK repository
@@ -90,27 +93,41 @@ scripts/vendor-sdk.sh <commit-or-tag>
 SDK_DIR=../Supertext-API-SDK-and-Guide scripts/vendor-sdk.sh   # a local clone
 ```
 
-Then run typecheck, tests and build, and note the update in `CHANGELOG.md`. `src/supertext/client.ts` wraps the SDK client (options in milliseconds, a `fetch` for tests, the User-Agent `supertext-sdk-typescript payload-supertext-translation`) and keeps the plugin's exported `SupertextClient`, `SupertextError` and `SUPERTEXT_ENVIRONMENTS`.
+Then run typecheck, tests and build, and note the update in `CHANGELOG.md`. The plugin imports the API from `src/vendor/supertext-sdk/v1/index.js` (the SDK's `supertext-sdk/v1`) and `SDK_VERSION` from `src/vendor/supertext-sdk/version.js`. `src/supertext/client.ts` wraps the SDK client (options in milliseconds, a `fetch` for tests, the User-Agent `supertext-sdk-typescript payload-supertext-translation`) and keeps the plugin's exported `SupertextClient`, `SupertextError` and `SUPERTEXT_ENVIRONMENTS`.
 
 ### Language codes
 
-Supertext's rule (from testing the live API): **source = bare language** (`en`, `de`), **target = regional code** (`de-DE`, `fr-CH`, `en-US`). A regional source or a bare target is rejected with `INVALID_LANGUAGE_PAIR`. Translating within one language (source `en`, target `en-GB`) is allowed.
+Supertext accepts exactly the codes of its `GET features` list (the SDK's `Languages.TARGETS` / `Languages.SOURCES`, `spec/languages.json` in the SDK repo): **sources are bare** (`en`, `de`); **targets** are regional only for German, English, French, Italian and Portuguese (`de-CH`, `en-US`, `pt-BR`), `zh-Hans`/`zh-Hant`, `sr-Latn`/`sr-Cyrl`, `gsw-u-sd-chzh`/`gsw-u-sd-chbe`, and **bare for all others** (`es`, `nl`, `sl`). Anything else is rejected (`INVALID_LANGUAGE_PAIR`, HTTP 404) — including the old guessed defaults `es-ES`, `sl-SI`, `zh-CN`.
 
-`src/languages.ts` turns locales into codes with the SDK's `LanguageCodes`:
+`src/languages.ts`, no guessing:
 
-- `targetCode(locale, languageMap)`: the `languageMap` entry wins, else the locale. The code is normalized (`de_ch`/`de-ch` → `de-CH`; scripts and numeric regions keep their form: `zh-Hant`, `es-419`). A bare language gets its default region from the SDK's `DEFAULT_REGIONS` (de→de-DE, en→en-US, fr→fr-FR, it→it-IT, pt→pt-PT, zh→zh-CN, …; the same table in every Supertext plugin). Unknown bare codes are sent unchanged, so Supertext's error names them.
-- `sourceCode(locale, languageMap)`: the language of the mapped code or locale (`de-CH` → `de`).
+- `targetCode(locale, languageMap)` = `Languages.target()`: the `languageMap` entry wins (sent as given), else a locale equal to a Supertext code apart from case and `_`/`-` (`de_ch` → `de-CH`, `es`), else `SupertextError('unsupported_language')` and nothing is sent. `targetCodeOrNull` is the same without throwing (status panel, Translate menu).
+- `sourceCode(locale, languageMap)`: `Languages.source()` of the mapped code, else of the locale (`de-CH` → `de`). The plugin has one map for both directions, holding target codes, so a mapped value is reduced to its language rather than sent as it is (the SDK's `Languages.source(code, mapping)` would send `de-CH` as the source).
+- `politenessForTarget(locale, target, politeness)`: `more`/`less` for a target where `Languages.supportsPoliteness()` is false throws `unsupported_feature` before anything is sent, so a setting is never dropped silently; the status panel shows the same as a warning.
 
-The test stand-in (`test/fakeSupertext.ts`) rejects bare targets and regional sources like the real API.
+`test/fakeSupertext.ts` accepts exactly the SDK's target list (HTTP 404 otherwise), bare sources, and politeness only where offered (HTTP 400 `FEATURE_ERROR`), like the live API.
+
+### Commando Center (version reports, API key check, ping)
+
+The protocol is the SDK's (`InstallationReporter`, `pingResponse`, `reporterState`, `reportsEnabled`; Commando-Center-Supertext-Translation → `docs/DEVELOPER.md` → *Report protocol*). `src/reporting.ts` only supplies what Payload knows:
+
+- **Options:** `plugin.name` = `Payload-Supertext-Translation` (the GitHub repo name), `plugin.version` from the plugin's `package.json` (`src/versions.ts`: searched upwards from the module, else in `<cwd>/node_modules`, because Next.js bundles the plugin), `system` = `Payload` and the version of the app's `payload` package, runtime and SDK version from the SDK, `siteUrl` = `config.serverURL`, else the request's `x-forwarded-host`/`host` (and `x-forwarded-proto`), `callbackUrl` = `<siteUrl><routes.api>/supertext/ping`.
+- **Setting:** the `versionReports` option (default on); `SUPERTEXT_VERSION_REPORTS` wins (`reportsEnabled`). `SUPERTEXT_REPORT_URL` points reports elsewhere (tests, screenshots).
+- **When:** the settings are code, so there is no `afterSettingsSaved`. `onRequest` runs in the background on `GET /status` (the Translate control and the dashboard panel load it) and `POST /translate`; the SDK checks the key when its fingerprint changed and reports `installed`, `upgraded` or a changed key status. `authenticationFailed` runs when a translation came back with `authentication_failure` (401/403). `testConnection` runs on `POST /check-key` (*Check again* on the panel), which waits for the result and returns it.
+- **State:** `payload.kv` (Payload's key-value store; by default the `payload-kv` collection Payload adds itself, so the plugin needs no migration), key `supertext-reporter`, the SDK's `ReporterState` as JSON. Without `payload.kv` (older Payload 3) it is kept in memory. The fingerprint stays there; the endpoints return the check without it. Calls are queued (one at a time per plugin instance) and never throw: storage errors are logged at debug level and swallowed.
+- **Ping:** `GET /api/supertext/ping` (`Reporting.ping` → `pingResponse`), public, status, headers (`Content-Type`, `Cache-Control: no-store`) and body exactly as the SDK returns them; 404 while reports are off.
 
 ## Endpoints
 
 | Method | Path | Body / response |
 | --- | --- | --- |
-| GET | `/api/supertext/status` | `{ apiKeyConfigured, canTranslate, locales }` — used by the panel. 401 when not logged in. |
+| GET | `/api/supertext/status` | `StatusResponse`: `{ apiKeyConfigured, canTranslate, locales, languages, version, releaseUrl, sdkVersion, reports: { enabled, pingUrl }, keyCheck }` — used by the Translate control and the dashboard panel. 401 when not logged in. Runs the reporter's `onRequest` in the background. |
 | POST | `/api/supertext/translate` | Body `TranslateRequestBody`. 200 with `{ results: LocaleResult[] }` if any locale succeeded, 502 if all failed, 400/401/403/500 with `{ error }` for validation, auth, permission and missing-key errors. |
 
-`LocaleResult` is `{ locale, ok: true, segments, missing: string[] }` or `{ locale, ok: false, error, code? }`.
+| POST | `/api/supertext/check-key` | Checks the API key now (`testConnection`), returns `{ keyCheck }`. 401/403 like `/translate`. |
+| GET | `/api/supertext/ping?challenge=…` | Public reachability check for the Commando Center (see above). |
+
+`LocaleResult` is `{ locale, ok: true, segments, missing: string[] }` or `{ locale, ok: false, error, code?, status? }`.
 
 `translateDocument` is exported for server-side use (hooks, jobs, scripts); without `req` it runs with `overrideAccess: true`.
 
@@ -133,11 +150,12 @@ Vitest, in `test/`:
 
 - `segments.test.ts` — HTML build/parse, escaping, whitespace, missing segments
 - `collect.test.ts` — schema walking for every supported field type, Lexical grouping, row-id rules, opt-outs
-- `client.test.ts` — the plugin's client on the SDK: API round trip, form fields, status and HTTP error mapping, timeout, 429 retries, key prefix, language codes (the SDK's own tests run in the SDK repository)
+- `client.test.ts` — the plugin's client on the SDK: API round trip, form fields, status and HTTP error mapping, timeout, 429 retries, key prefix, language codes (exact matches, no default regions, mapping, source from the mapped code, politeness) (the SDK's own tests run in the SDK repository)
+- `reporting.test.ts` — the Commando Center glue: repo name and version, the setting and `SUPERTEXT_VERSION_REPORTS`, site URL, state in `payload.kv` or memory, `installed` → nothing → `upgraded`, back-off and never throwing, ping answers, the language table
 - `translations.test.ts` — all four languages have the English keys, placeholders and URLs; every key the control and endpoints use and every error code of the SDK has a message; config merging; French messages through Payload's own `initI18n`
-- `integration.test.ts` — boots a real Payload 3 instance on in-memory SQLite with Lexical, drafts, arrays, blocks and a global; covers translating into several locales, drafts, globals, failures and the endpoint (auth, validation, happy path)
+- `integration.test.ts` — boots a real Payload 3 instance on in-memory SQLite with Lexical, drafts, arrays, blocks and a global; covers translating into several locales, drafts, globals, failures, unmapped locales, politeness and the endpoints (auth, validation, happy path; status with languages, one `installed` report to a fake center, `api_key_check` after a 401, *Check again*, reports off, the ping)
 
-`test/fakeSupertext.ts` is an in-memory Supertext API that "translates" by prefixing `[<target_lang>]`. No test calls the real API.
+`test/fakeSupertext.ts` is an in-memory Supertext API that "translates" by prefixing `[<target_lang>]`, and a fake Commando Center (`POST …/report` → 202, recorded in `reports`). No test calls the real API or the real center.
 
 ## CI / deploy
 
@@ -148,6 +166,7 @@ Vitest, in `test/`:
 A small Payload 3 + Next.js 16 site that uses the plugin the way a customer would: Pages (drafts, blocks in tabs, rich text, SEO group, a non-localized field) and a Header global, locales `en`, `de-CH`, `fr-CH`, `it-CH`, Postgres. A public frontend at `/<locale>/<slug>` shows the published version of each language.
 
 - `src/seed.ts` runs on every start: creates the demo accounts from `DEMO_ADMIN_EMAIL`/`DEMO_ADMIN_PASSWORD` (fallback: `PAYLOAD_ADMIN_*`) and `DEMO_EDITOR_EMAIL`/`DEMO_EDITOR_PASSWORD` if they don't exist yet — existing accounts are never changed, and the demo has no roles, so both accounts have full access — and English sample content when there are no pages. With an account variable set, Payload's "create first user" screen no longer appears.
+- `languageMap: { en: 'en-US' }`: `de-CH`, `fr-CH` and `it-CH` are Supertext codes already; `en` isn't (English is `en-US` or `en-GB`).
 - Schema changes need a migration: `cd demo && npm run payload migrate:create <name>`, commit `src/migrations/`. Production applies them on start (`prodMigrations`); there is no automatic schema push in production.
 - `i18n.supportedLanguages` offers English, German, French and Italian as admin languages.
 - `localization.defaultLocalePublishOption: 'active'` makes **Publish** release only the language being viewed (see "Publishing" in the user guide).
@@ -176,7 +195,7 @@ Service **Payload** in the Railway project `supertext-cms-demos` (region Amsterd
 | Builder | Dockerfile, path `demo/Dockerfile`, build context = repo root |
 | Database | Database `payload_demo` on the project's shared **Postgres** service (created automatically on first start; Strapi's data lives in its own database). No volume — the project is at Railway's 3-volume limit. |
 | Healthcheck | `/` |
-| Variables | `DATABASE_URL` (Railway reference to the Postgres service's user, password, host and port, with database `payload_demo`), `PAYLOAD_SECRET`, `SUPERTEXT_API_KEY`, `SUPERTEXT_ENVIRONMENT`, `DEMO_ADMIN_EMAIL`, `DEMO_ADMIN_PASSWORD`, `DEMO_EDITOR_EMAIL`, `DEMO_EDITOR_PASSWORD` (older `PAYLOAD_ADMIN_*` still work) — set in Railway, never in the repo |
+| Variables | `DATABASE_URL` (Railway reference to the Postgres service's user, password, host and port, with database `payload_demo`), `PAYLOAD_SECRET`, `SUPERTEXT_API_KEY`, `SUPERTEXT_ENVIRONMENT`, optionally `SUPERTEXT_VERSION_REPORTS` (`0` turns version reports off), `DEMO_ADMIN_EMAIL`, `DEMO_ADMIN_PASSWORD`, `DEMO_EDITOR_EMAIL`, `DEMO_EDITOR_PASSWORD` (older `PAYLOAD_ADMIN_*` still work) — set in Railway, never in the repo |
 
 The Dockerfile packs the plugin from the repo root, installs it into the demo, builds Next.js in standalone mode and runs `node server.js` on port 3000. If a push does not start a deployment, Railway's GitHub app has no access to this repository: in the Supertext GitHub organisation settings → *GitHub Apps* → **Railway** → *Configure*, add the repository under *Repository access*. A manual redeploy in Railway works in the meantime.
 
@@ -188,16 +207,16 @@ The images in `docs/images/` are generated by `test/docs/screenshots.mjs` (Playw
 
 ```bash
 cd test/docs && npm install && npx playwright install chromium
-npm run stand-in &                                  # http://127.0.0.1:8765/v1/
+npm run stand-in &                                  # http://127.0.0.1:8765/v1/ (and a fake center at /report)
 cd ../../demo && npm run plugin                      # pack the current plugin into the demo
 # empty database, e.g. dropdb payload_demo, then:
 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/payload_demo PAYLOAD_SECRET=local \
-  SUPERTEXT_API_KEY=test-key SUPERTEXT_API_URL=http://127.0.0.1:8765/v1/ \
+  SUPERTEXT_API_KEY=test-key SUPERTEXT_API_URL=http://127.0.0.1:8765/v1/ SUPERTEXT_REPORT_URL=http://127.0.0.1:8765/report \
   DEMO_ADMIN_EMAIL=anna.muster@example.com DEMO_ADMIN_PASSWORD='Docs12345!' npm run dev &
 cd ../test/docs && BASE_URL=http://localhost:3000 npm run screenshots
 ```
 
-Use `localhost`, not `127.0.0.1`: `next dev` blocks its dev assets for other origins and the admin stays blank. The script hides the Next.js dev badge and the account avatar (Gravatar). When the seeded content changes, add the new English strings and their German to `sample-de.json`.
+Use `localhost`, not `127.0.0.1`: `next dev` blocks its dev assets for other origins and the admin stays blank. Always set `SUPERTEXT_REPORT_URL` to the stand-in, so a screenshot run never reports to the live Commando Center. The dashboard panel (`status-panel.png`) shows the live demo's ping URL instead of the local one. The script hides the Next.js dev badge and the account avatar (Gravatar). When the seeded content changes, add the new English strings and their German to `sample-de.json`.
 
 ## Dependency updates
 
@@ -231,6 +250,6 @@ Publishing to npm is not set up yet; until then installs use the GitHub URL (opt
 - Payload blocks embedded in Lexical (BlocksFeature) and Lexical code blocks are not translated.
 - Slate rich text (Payload 2 legacy) is not supported.
 - Re-translating overwrites the target locale's translated fields; there is no change detection or translation memory.
-- No API key check button in the admin panel yet (`validateApiKey` exists in the client).
+- No settings form: options are code, so the Supertext panel only shows them, and there is no `settings_saved` report (the key check runs when the key's fingerprint changes and on *Check again*).
 - Human (professional) translation orders, as in the WordPress plugin, are not implemented.
 - Not published on npm yet.

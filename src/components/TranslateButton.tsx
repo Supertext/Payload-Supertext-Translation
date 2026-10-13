@@ -12,9 +12,9 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { SupertextI18nKey, supertextTranslations } from '../translations.js'
-import type { LocaleResult, TranslateResponse } from '../types.js'
+import type { LocaleResult, StatusResponse, TranslateResponse } from '../types.js'
 
-type Status = { apiKeyConfigured: boolean; canTranslate: boolean; locales: string[] }
+type Status = Pick<StatusResponse, 'apiKeyConfigured' | 'canTranslate' | 'locales'> & Partial<Pick<StatusResponse, 'languages'>>
 
 /**
  * "Translate with Supertext" control in the document header. Translates the saved
@@ -77,6 +77,10 @@ export function TranslateButton() {
       : modified
         ? t('supertext:unsavedChanges')
         : null
+
+  // Locales without a Supertext language can't be chosen (the panel on the dashboard says how to map them).
+  const unmapped = new Set((status?.languages ?? []).filter((l) => l.supertext === null).map((l) => l.locale))
+  const available = targets.filter((l) => !unmapped.has(l.code))
 
   const toggle = (code: string) =>
     setSelected((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]))
@@ -146,19 +150,24 @@ export function TranslateButton() {
           <p style={{ color: 'var(--theme-elevation-500)', fontSize: 13, margin: '0 0 12px' }}>
             {withBold(t('supertext:fromInto', { locale: MARK }), sourceLocale)}
           </p>
-          {targets.map((t) => (
-            <label key={t.code} style={{ alignItems: 'center', display: 'flex', gap: 8, marginBottom: 6 }}>
+          {targets.map((target) => (
+            <label key={target.code} style={{ alignItems: 'center', display: 'flex', gap: 8, marginBottom: 6 }}>
               <input
-                checked={selected.includes(t.code)}
-                disabled={busy}
-                onChange={() => toggle(t.code)}
+                checked={selected.includes(target.code)}
+                disabled={busy || unmapped.has(target.code)}
+                onChange={() => toggle(target.code)}
                 type="checkbox"
               />
-              {t.label} <span style={{ color: 'var(--theme-elevation-500)' }}>({t.code})</span>
+              {target.label} <span style={{ color: 'var(--theme-elevation-500)' }}>({target.code})</span>
+              {unmapped.has(target.code) && (
+                <span style={{ color: 'var(--theme-warning-500, #b26b00)', fontSize: 13 }}>
+                  {t('supertext:noSupertextLanguage')}
+                </span>
+              )}
             </label>
           ))}
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button type="button" disabled={busy} onClick={() => setSelected(targets.map((t) => t.code))} style={linkStyle}>
+            <button type="button" disabled={busy} onClick={() => setSelected(available.map((t) => t.code))} style={linkStyle}>
               {t('supertext:all')}
             </button>
             <button type="button" disabled={busy} onClick={() => setSelected([])} style={linkStyle}>

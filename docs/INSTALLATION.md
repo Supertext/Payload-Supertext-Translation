@@ -13,7 +13,7 @@ For administrators and developers who set up a Payload project. Editors: see the
 | Payload localization | must be enabled — the plugin translates between your configured locales |
 | Supertext | a Supertext account and an API key with access to AI translation — see [API key](#api-key) |
 
-The server must be able to reach `https://api.supertext.com` over HTTPS.
+The server must be able to reach `https://api.supertext.com` over HTTPS (and, while *Send version information to Supertext* is on, `https://commandocenter-production.up.railway.app`; see [Version information](#version-information-the-api-key-check-and-the-ping-endpoint)).
 
 ## Install
 
@@ -45,13 +45,13 @@ export default buildConfig({
 })
 ```
 
-Then regenerate the admin import map (the plugin adds a client component) and restart:
+Then regenerate the admin import map (the plugin adds two client components: the Translate control and the Supertext panel on the dashboard) and restart:
 
 ```bash
 npx payload generate:importmap
 ```
 
-If you skip this step, the admin panel shows an error about `payload-supertext-translation/client#TranslateButton` missing from the import map.
+If you skip this step, the admin panel shows an error about `payload-supertext-translation/client#TranslateButton` or `#SupertextStatus` missing from the import map.
 
 ## API key
 
@@ -69,6 +69,8 @@ SUPERTEXT_API_KEY=your-key-here
 The key can be entered as Supertext shows it (`Supertext-Auth-Key …`) or without that prefix; both work.
 
 Alternatively pass `apiKey` in the plugin options (read it from your own secret store, not a literal). Without a key the Translate panel shows "No Supertext API key is configured" and the endpoint answers HTTP 500 with a message that links to the signup and API key pages above.
+
+The plugin checks the key automatically (see [The API key check](#version-information-the-api-key-check-and-the-ping-endpoint)) and shows the result on the **Supertext panel** of the admin dashboard.
 
 Once the plugin is installed and the key is set, every enabled collection and global shows a **Translate** button next to Save and Publish:
 
@@ -96,21 +98,29 @@ The languages offered in the Translate menu are your Payload locales (`localizat
 
 <img src="images/locales.png" alt="Payload locale selector: English (en), Deutsch (Schweiz) (de-CH), Français (Suisse) (fr-CH), Italiano (Svizzera) (it-CH)" width="520">
 
-Payload locale codes become Supertext codes automatically, so BCP-47 codes such as `en`, `de`, `de-CH`, `fr_FR`, `pt-BR` need no setup:
+Each Payload locale needs a Supertext language. Supertext accepts exactly these target codes (from its `features` list, October 2026):
 
-- **Target languages** are always sent with a region, because Supertext rejects bare targets: a locale with a region keeps it (`de-CH`, `fr_ch` → `fr-CH`); a bare one gets the usual default (`de` → `de-DE`, `fr` → `fr-FR`, `it` → `it-IT`, `en` → `en-US`, `pt` → `pt-PT`, `zh` → `zh-CN`, …).
-- **The source language** is sent without region (`de-CH` → `de`), because Supertext rejects regional source codes.
+| Language | Supertext codes |
+| --- | --- |
+| German, English, French, Italian, Portuguese | `de-DE`, `de-CH`, `de-AT`, `en-US`, `en-GB`, `fr-FR`, `fr-CH`, `it-IT`, `it-CH`, `pt-PT`, `pt-BR` |
+| Chinese, Serbian | `zh-Hans`, `zh-Hant`, `sr-Latn`, `sr-Cyrl` |
+| Swiss German | `gsw-u-sd-chzh` (Zurich), `gsw-u-sd-chbe` (Bern) |
+| All others, without region | `bg`, `cs`, `da`, `el`, `es`, `fi`, `hr`, `hu`, `ja`, `ko`, `nb`, `nl`, `pl`, `rm`, `ru`, `sk`, `sl`, `sq`, `sv`, `tr` |
 
-For another region (e.g. Austrian German for the locale `de`), or if your locale codes are not BCP-47, map them with `languageMap`; a mapping wins over the default (for the source, its language is used):
-
+- A locale that **is** one of these codes (apart from upper/lower case and `_`/`-`) is used as it is: `de-CH`, `fr_ch`, `es`, `nl`.
+- **Every other locale needs an entry in `languageMap`**, e.g. `en` → `en-US`, `de` → `de-CH`, `zh` → `zh-Hans`. The plugin never guesses a region: an unmapped locale is shown as *no Supertext language yet* in the Translate menu (it can't be ticked), as *Not mapped* on the Supertext panel, and a translation into it through the API fails with *has no Supertext language yet*; nothing is sent for it.
+- **The source language** is sent without region (`de-CH` → `de`); for a mapped locale, the language of the mapped code is used. A locale that is only a source (often the default locale) needs no entry, but it can't be translated into without one.
+- **Formal/informal** (`politeness`) is offered for every target except English, Swiss German, Romansh, Albanian and Serbian. For those, leave the tone on `default`: a `more`/`less` setting makes the translation fail with *Supertext offers no formal or informal tone for this language* (nothing is sent), and the Supertext panel warns about it.
 
 ```ts
 supertextTranslation({
   collections: ['pages'],
-  languageMap: { ch: 'de-CH', romand: 'fr-CH', de: 'de-AT' },
-  politeness: { 'de-CH': 'more' }, // formal "Sie"; use 'less' for informal
+  languageMap: { en: 'en-US', de: 'de-CH', ch: 'de-CH', romand: 'fr-CH', zh: 'zh-Hans' },
+  politeness: { de: 'more' }, // formal "Sie"; use 'less' for informal
 })
 ```
+
+The list is also exported as `SUPERTEXT_TARGETS` (code, English name, whether formal/informal is offered).
 
 ### Interface languages
 
@@ -139,14 +149,36 @@ Each user then picks the language under *Account* → *Language* (Payload also f
 | `apiKey` | `process.env.SUPERTEXT_API_KEY` | Supertext API key, with or without the `Supertext-Auth-Key ` prefix. |
 | `environment` | `'live'` | `live`, `staging` or `testing` Supertext API. |
 | `apiUrl` | — | Explicit API base URL (e.g. a proxy). Overrides `environment`. |
-| `languageMap` | `{}` | Payload locale → Supertext language code (with region, e.g. `de-AT`). Without an entry, bare locales get a default region (`de` → `de-DE`). |
-| `politeness` | `{}` | Payload locale → `default`, `more` (formal) or `less` (informal). |
+| `languageMap` | `{}` | Payload locale → Supertext language code, e.g. `{ en: 'en-US', de: 'de-CH', zh: 'zh-Hans' }`. Needed for every locale that isn't itself a Supertext code (see [Language setup](#language-setup)); there are no default regions. |
+| `politeness` | `{}` | Payload locale → `default`, `more` (formal) or `less` (informal). Only for targets that offer it (not English, Swiss German, Romansh, Albanian, Serbian). |
+| `versionReports` | `true` | *Send version information to Supertext* (see [Version information](#version-information-the-api-key-check-and-the-ping-endpoint)). The environment variable `SUPERTEXT_VERSION_REPORTS` wins: `0` (or `false`, `off`, `no`) turns it off, `1` on. |
+| `dashboardPanel` | `true` | Show the Supertext panel on the admin dashboard (for users who may translate). |
 | `skipFieldNames` | `['slug']` | Field names never translated, at any depth. |
 | `saveAsDraft` | `true` | With drafts enabled, translations are saved as a draft for review. Set `false` to save straight into the current version. |
 | `pollIntervalMs` | `2000` | How often the server asks Supertext whether a translation is ready. |
 | `timeoutMs` | `180000` | Maximum wait per document and locale (3 minutes). |
 | `access` | logged-in user | `({ req }) => boolean` — who may start translations. The collection's/global's own read and update access is always enforced as well. |
 | `disabled` | `false` | Leave the endpoints and panel out of the config (the plugin adds no fields, so the schema is unaffected). |
+
+## The Supertext panel
+
+The plugin's settings are code (the options above and environment variables), so it has no settings form. Instead, the admin **dashboard** shows a **Supertext translation** panel to users who may translate: the installed plugin version (linked to its release notes on GitHub) and the bundled Supertext SDK version, the latest API key check with its time and a **Check again** button (a cost-free call to the Supertext API), every Payload locale with the Supertext code and tone it is sent with (*Not mapped* for locales that still need a `languageMap` entry), and whether version information is sent to Supertext, with the ping URL.
+
+![The Supertext panel on the dashboard: plugin version 0.1.0, SDK 0.2.0, "API key checked: the connection to Supertext works." with its time, Check again, the languages en → en-US, de-CH → de-CH (more), fr-CH → fr-CH, it-CH → it-CH, and Send version information to Supertext: On, with the ping URL](images/status-panel.png)
+
+Turn the panel off with `dashboardPanel: false`.
+
+## Version information, the API key check and the ping endpoint
+
+**Send version information to Supertext** (option `versionReports`) is on by default. The plugin then sends the site URL and the versions of this plugin, Payload and Node.js to Supertext after an update and when the API key changes, so Supertext support can see which version you run. A report contains exactly: the site URL (Payload's `serverURL`, else the address the admin request came in on), the plugin's name (`Payload-Supertext-Translation`) and version, the Payload and Node.js versions, the bundled Supertext SDK version, whether a key is set, the result of the API key check below (status, time, HTTP status, Supertext's error code) and the address of the ping endpoint. **No content, no API key and no personal data are sent.** Reports go from the Payload server, never from the browser, only on back-end requests that run the plugin's code (the Translate control and the Supertext panel loading, translations, *Check again*), in the background; a report that fails is not retried for an hour and never slows down or breaks a translation.
+
+To turn it off, set `versionReports: false` in the plugin options, or `SUPERTEXT_VERSION_REPORTS=0` in the environment (which wins over the option), and restart. Nothing is sent at all then, and the ping endpoint answers 404.
+
+**The API key check** runs whether or not version information is sent: when the plugin first runs with a key it hasn't checked yet (the key is compared by a SHA-256 fingerprint kept in your database, never the key itself), on **Check again**, and when Supertext rejects the key during a translation. It's Supertext's cost-free `features` call; nothing is translated or billed. The Supertext panel shows the latest result with its time: *the connection to Supertext works*, *Supertext rejected the API key* (with the links to create an account and generate a key), *no API key is set*, *Supertext can't be reached* or *Supertext answered with an error*.
+
+The reporter's state (the last reported versions, the latest key check and the key's fingerprint) is stored in Payload's key-value store (`payload.kv`, by default the `payload-kv` collection Payload creates itself, key `supertext-reporter`). The plugin adds no collection of its own; on Payload versions without the key-value store it keeps the state in memory.
+
+**The ping endpoint** `GET <serverURL>/api/supertext/ping?challenge=…` is public (no login) and answers only `{"ok":true,"plugin":"Payload-Supertext-Translation","challenge":"…"}` with `Cache-Control: no-store`, so Supertext can see that the site is reachable from the internet. It returns nothing else: no versions, no settings, no data. If a CDN or firewall sits in front of Payload, let `GET /api/supertext/ping` through uncached.
 
 ## Recommended: publish one language at a time
 
@@ -181,7 +213,7 @@ Check [CHANGELOG.md](../CHANGELOG.md) for changes.
 2. `npm uninstall payload-supertext-translation`
 3. `npx payload generate:importmap`
 
-The plugin adds no collections or fields, so no migration is needed. Translations already saved stay in your documents.
+The plugin adds no collections or fields, so no migration is needed. Translations already saved stay in your documents. The reporter's state stays as one entry (`supertext-reporter`) in Payload's key-value store; delete it there if you like.
 
 ## Troubleshooting
 
@@ -193,7 +225,12 @@ The plugin adds no collections or fields, so no migration is needed. Translation
 | "No Supertext API key is configured" | Set `SUPERTEXT_API_KEY` on the server and restart. No key yet? See [API key](#api-key) (account signup and key generation, Admin role required). |
 | "Authentication failure" | The key is wrong or for another environment (`live` vs `staging`). Generate a new one at <https://www.supertext.com/en/integrations/api> (Admin role required). |
 | "Your Supertext translation limit is exceeded" | The Supertext subscription quota is used up. |
-| "Supertext does not support this language pair" | The target code isn't a language Supertext supports; add a `languageMap` entry. The detail shows the codes that were sent. |
+| "Supertext does not support this language pair" | The code sent (from `languageMap`) isn't one Supertext offers; use a code from [Language setup](#language-setup). The detail shows the codes that were sent. |
+| "The language … has no Supertext language yet", or *no Supertext language yet* in the Translate menu | The locale is no Supertext code and has no `languageMap` entry (e.g. `de`, `fr`, `en`, `zh-CN`). Map it, e.g. `languageMap: { de: 'de-CH' }`, and restart. The Supertext panel shows which locales are *Not mapped*. |
+| "Supertext offers no formal or informal tone for this language" | `politeness` is set to `more`/`less` for a target without formal/informal (English, Swiss German, Romansh, Albanian, Serbian). Remove it or set `default`. |
+| "Supertext rejected the API key" on the Supertext panel | Check that the whole key was copied into `SUPERTEXT_API_KEY` (and the `environment` matches the key), restart, then **Check again**. New key: <https://www.supertext.com/en/integrations/api> (Admin role required). |
+| "The API key couldn't be checked …" | Supertext couldn't be reached or answered with an error; translations may still work. Check the server's outgoing HTTPS access, then **Check again** later. |
+| The ping endpoint answers 404 | Version information is off (`versionReports: false` or `SUPERTEXT_VERSION_REPORTS=0`). |
 | "Timed out waiting…" | Very long document or slow service; raise `timeoutMs` (and the platform's request timeout). |
 | "Collection … is not enabled" | The endpoint only accepts slugs listed in the options. |
 

@@ -25,12 +25,26 @@ export type SupertextTranslationOptions = {
   apiUrl?: string
 
   /**
-   * Payload locale code → Supertext language code. Unmapped locales are sent as-is,
-   * so `en`, `de-CH`, `fr-FR` need no entry. Example: `{ 'de-formal': 'de-CH' }`.
+   * Payload locale code → Supertext language code. A locale that is already a Supertext code
+   * (apart from case and `_`/`-`: `en`, `de-CH`, `fr_ch`, `es`, `nl`) needs no entry; any other
+   * locale must be mapped (`{ de: 'de-CH', fr: 'fr-FR', zh: 'zh-Hans' }`), or translating into it
+   * fails with "has no Supertext language yet" and nothing is sent. There are no default regions.
+   * Supported codes: `SUPERTEXT_TARGETS` and docs/INSTALLATION.md.
    */
   languageMap?: Record<string, string>
-  /** Payload locale code → politeness (`more` = formal, `less` = informal). */
+  /**
+   * Payload locale code → politeness (`more` = formal, `less` = informal). Only for targets that
+   * offer it (see docs/INSTALLATION.md); for others the translation fails with a clear message.
+   */
   politeness?: Record<string, Politeness>
+
+  /**
+   * "Send version information to Supertext": the site URL and the versions of this plugin,
+   * Payload, Node.js and the Supertext SDK, whether an API key is set and the latest key check,
+   * and the ping URL. No content, no API key, no personal data. Default: `true`.
+   * The environment variable `SUPERTEXT_VERSION_REPORTS=0` turns it off (and `=1` on) regardless.
+   */
+  versionReports?: boolean
 
   /** Field names never translated at any depth. Default: `['slug']`. */
   skipFieldNames?: string[]
@@ -52,6 +66,12 @@ export type SupertextTranslationOptions = {
   access?: (args: { req: PayloadRequest }) => boolean | Promise<boolean>
 
   /**
+   * Show the Supertext panel (plugin version, API key check, languages, version reports) on the
+   * admin dashboard, for users who may translate. Default: `true`.
+   */
+  dashboardPanel?: boolean
+
+  /**
    * Keep the endpoint and admin panel out of the config (e.g. per environment)
    * without changing the database schema. The plugin adds no fields either way.
    */
@@ -68,8 +88,36 @@ export type TranslateRequestBody = {
 
 export type LocaleResult =
   | { locale: string; ok: true; segments: number; missing: string[] }
-  | { locale: string; ok: false; error: string; code?: string }
+  | { locale: string; ok: false; error: string; code?: string; status?: number }
 
 export type TranslateResponse = {
   results: LocaleResult[]
+}
+
+export type LanguageStatus = {
+  locale: string
+  /** The Supertext code it is sent as; null when it has none (not mapped). */
+  supertext: string | null
+  politeness: Politeness
+  /** False when `politeness` is set but the target offers no formal/informal choice. */
+  politenessSupported: boolean
+}
+
+export type KeyCheckStatus = {
+  status: 'ok' | 'invalid' | 'missing' | 'unreachable' | 'error'
+  checkedAt: string
+  httpStatus: number | null
+  errorCode: string | null
+}
+
+export type StatusResponse = {
+  apiKeyConfigured: boolean
+  canTranslate: boolean
+  locales: string[]
+  languages: LanguageStatus[]
+  version: string | null
+  releaseUrl: string | null
+  sdkVersion: string
+  reports: { enabled: boolean; pingUrl: string | null }
+  keyCheck: KeyCheckStatus | null
 }

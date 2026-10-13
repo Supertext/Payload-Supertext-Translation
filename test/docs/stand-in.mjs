@@ -2,7 +2,9 @@
 /**
  * Docs screenshots only: answers like the Supertext AI file translation API and
  * returns real German for the demo's seeded content (sample-de.json). Other text
- * comes back unchanged. Listens on :8765 (any API key).
+ * comes back unchanged. Listens on :8765 (any API key). Also stands in for the Supertext
+ * Commando Center (`POST /report` → 202), so screenshot runs never report to the live center:
+ * start the demo with SUPERTEXT_REPORT_URL=http://127.0.0.1:8765/report.
  */
 import http from 'node:http'
 import { randomBytes } from 'node:crypto'
@@ -21,6 +23,10 @@ http
       res.end(type === 'application/json' ? JSON.stringify(body) : body)
     }
     if (path === '/features') return send(200, {})
+    if (req.method === 'POST' && path.endsWith('/report')) {
+      for await (const chunk of req) void chunk
+      return send(202, { ok: true })
+    }
     if (req.method === 'POST') {
       const chunks = []
       for await (const chunk of req) chunks.push(chunk)

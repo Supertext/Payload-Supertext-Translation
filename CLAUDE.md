@@ -77,14 +77,17 @@ The user guide and installation guide of every plugin include screenshots of the
 
 AI file translation API v1, same as the WordPress plugin: POST HTML file → poll status → GET translation → DELETE. Details in `docs/DEVELOPER.md`. Never commit API keys; use the `SUPERTEXT_API_KEY` environment variable or the plugin's `apiKey` option.
 
-**Language codes:** source = bare language (`en`), target = regional code (`de-DE`, `en-US`); Supertext rejects bare targets (`INVALID_LANGUAGE_PAIR`). Bare CMS locales get a regional default; see `docs/DEVELOPER.md` → *Language codes*.
+**Language codes:** no guessing. Supertext accepts only the codes of its `features` list (the SDK's `Languages`): sources bare (`en`), targets regional only for de/en/fr/it/pt (`de-CH`, `en-US`), `zh-Hans`/`zh-Hant`, `sr-Latn`/`sr-Cyrl`, `gsw-u-sd-chzh`/`chbe`, and bare for all others (`es`, `nl`). A locale is resolved by the `languageMap` option, else an exact match, else `unsupported_language` (nothing sent); formal/informal only where `Languages.supportsPoliteness()`. See `docs/DEVELOPER.md` → *Language codes*.
+
+**Commando Center:** version reports, the API key check and the public ping (`/api/supertext/ping`) go through the SDK's `InstallationReporter` in `src/reporting.ts` (state in `payload.kv`); see `docs/DEVELOPER.md` → *Commando Center*. Reporting must never break a request.
 
 ## This repo
 
 - `npm test` (Vitest; includes a real Payload instance on in-memory SQLite), `npm run typecheck`, `npm run build`. All three must pass before committing.
 - New options go in `src/types.ts` **and** the settings table in `docs/INSTALLATION.md`.
 - UI and error strings live in `src/translations.ts` (English, German, French, Italian); add every new string in all four.
-- All Supertext API calls go through the Supertext SDK, whose TypeScript sources are copied into `src/vendor/supertext-sdk` and compiled with the plugin; `src/supertext/client.ts` wraps it. Never edit `src/vendor/`: fix the SDK in `Supertext/Supertext-API-SDK-and-Guide` and run `scripts/vendor-sdk.sh`. Every SDK error code needs an `error_<code>` string in all four languages.
+- The dashboard panel is referenced as `payload-supertext-translation/client#SupertextStatus`; renaming it is a breaking change too.
+- All Supertext API calls go through the Supertext SDK, whose TypeScript sources are copied into `src/vendor/supertext-sdk` (API in `v1/`) and compiled with the plugin; `src/supertext/client.ts` wraps it. Never edit `src/vendor/`: fix the SDK in `Supertext/Supertext-API-SDK-and-Guide` and run `scripts/vendor-sdk.sh`. Every SDK error code needs an `error_<code>` string in all four languages.
 - Field-walking rules live in `src/collect.ts`; keep the "Field rules" section of `docs/DEVELOPER.md` in sync.
 - `demo/` is the Railway demo site (Dockerfile `demo/Dockerfile`, context = repo root). Changing its collections/globals needs a migration (`cd demo && npm run payload migrate:create <name>`) committed with the change, otherwise the deployed demo won't start. Demo secrets live only in Railway variables.
 - The admin component is referenced by import-map path `payload-supertext-translation/client#TranslateButton`; renaming it is a breaking change for users (they must regenerate the import map).

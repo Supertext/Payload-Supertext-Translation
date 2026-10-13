@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 import { errorMessage, withSupertextTranslations } from '../src/i18n.js'
 import { SupertextError } from '../src/supertext/client.js'
-import { ErrorCode, errorForStatus as statusError } from '../src/vendor/supertext-sdk/index.js'
+import { ErrorCode, errorForStatus as statusError } from '../src/vendor/supertext-sdk/v1/index.js'
 import { supertextTranslations } from '../src/translations.js'
 
 const src = (file: string) => readFileSync(join(__dirname, '../src', file), 'utf8')
@@ -37,6 +37,8 @@ describe('plugin translations', () => {
   it('has a message for every key the admin control and the endpoints use', () => {
     const used = [
       ...[...src('components/TranslateButton.tsx').matchAll(/t\('supertext:(\w+)'/g)].map((m) => m[1]),
+      ...[...src('components/SupertextStatus.tsx').matchAll(/t\('supertext:(\w+)'/g)].map((m) => m[1]),
+      ...['ok', 'invalid', 'missing', 'unreachable', 'error'].map((status) => `keycheck_${status}`),
       ...[...src('endpoints.ts').matchAll(/translate\(req, '(\w+)'/g)].map((m) => m[1]),
     ]
     expect(used.length).toBeGreaterThan(15)
@@ -81,5 +83,6 @@ describe('errorMessage', () => {
     expect(errorMessage(req, statusError(418, ''))).toBe('Supertext a renvoyé un code d’état inattendu : 418.')
     expect(errorMessage(undefined, new SupertextError('timeout'))).toBe(en.error_timeout)
     expect(errorMessage(req, new Error('Validation failed'))).toBe('Validation failed')
+    expect(errorMessage(req, new SupertextError('unsupported_language', { targetLang: 'pt' }))).toContain('La langue pt ')
   })
 })

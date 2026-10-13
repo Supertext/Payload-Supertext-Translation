@@ -11,7 +11,7 @@ import { DEFAULT_MAX_CHARACTERS, isBlank, planBatches, type KeyedSegment } from 
 import { errorForFileStatus, errorForStatus, SupertextError } from './errors.js'
 import { build, parse, type Segment } from './html-document.js'
 import { encodeMultipart, type MultipartBody } from './multipart.js'
-import { source as sourceCode, target as targetCode } from './language-codes.js'
+import { apiKeyCheckFromError, apiKeyFingerprint, isoSeconds, KEY_CHECK_TIMEOUT_MS, type ApiKeyCheck } from './api-key-check.js'
 
 export const LIVE_BASE_URL = 'https://api.supertext.com/v1/'
 
@@ -39,6 +39,14 @@ export interface SupertextClientOptions {
   sleep?: (ms: number) => Promise<void>
   /** Clock in milliseconds (tests). Default `Date.now`. */
   now?: () => number
+}
+
+/** One language pair from `GET features`. */
+export interface FeatureSupport {
+  sourceLang: string
+  targetLang: string
+  /** E.g. `supports_politeness`, `supports_glossary`. */
+  features: string[]
 }
 
 export interface TranslateOptions {
@@ -87,15 +95,52 @@ export class SupertextClient {
     this.#now = options.now ?? Date.now
   }
 
-  /** Cost-free check that the API key is accepted (`GET features`). */
+  /**
+   * The language pairs the API offers right now, with their features (`supports_politeness`, …):
+   * the live version of `Languages.SOURCES`/`TARGETS`, e.g. for a settings page. Cost-free.
+   */
+  async getFeatures(): Promise<FeatureSupport[]> {
+    const list = jsonObject(await this.#request('GET', 'features'))?.supported_features
+    if (!Array.isArray(list)) return []
+    return list.flatMap((item: unknown) => {
+      const o = item && typeof item === 'object' ? (item as Record<string, unknown>) : {}
+      if (typeof o.source_lang !== 'string' || typeof o.target_lang !== 'string') return []
+      const features = Array.isArray(o.features) ? o.features.filter((f): f is string => typeof f === 'string') : []
+      return [{ sourceLang: o.source_lang, targetLang: o.target_lang, features }]
+    })
+  }
+
+  /** Cost-free check that the API key is accepted (`GET features`). Throws a `SupertextError` if not. */
   async validateApiKey(): Promise<void> {
     await this.#request('GET', 'features')
   }
 
-  /** Uploads an HTML document; returns the file id. Language codes are normalized (`de` → `de-DE`, `en-US` → `en`). */
+  /**
+   * The automatic API key check (Commando Center protocol): `GET features` with a
+   * 10 s timeout, mapped to `ok`, `invalid`, `missing`, `unreachable` or `error`.
+   * Never throws. A blank key gives `missing` without a request.
+   */
+  async checkApiKey(): Promise<ApiKeyCheck> {
+    const checkedAt = isoSeconds(this.#now())
+    const fingerprint = apiKeyFingerprint(this.#apiKey)
+    if (fingerprint === '') return { status: 'missing', checkedAt, httpStatus: null, errorCode: null, fingerprint }
+    try {
+      const status = await this.#request('GET', 'features', undefined, Math.min(KEY_CHECK_TIMEOUT_MS, this.requestTimeoutMs), true)
+      return { status: 'ok', checkedAt, httpStatus: Number(status), errorCode: null, fingerprint }
+    } catch (error) {
+      return { ...apiKeyCheckFromError(error), checkedAt, fingerprint }
+    }
+  }
+
+  /**
+   * Uploads an HTML document; returns the file id. The language codes are sent as given
+   * (trimmed): resolve CMS languages with `Languages.target()` / `Languages.source()` first.
+   */
   async submit(html: string, targetLang: string, options: TranslateOptions = {}): Promise<string> {
-    const fields: [string, string][] = [['target_lang', targetCode(targetLang)]]
-    const source = sourceCode(options.sourceLang ?? '')
+    const target = targetLang.trim()
+    if (target === '') throw new SupertextError('unsupported_language')
+    const fields: [string, string][] = [['target_lang', target]]
+    const source = (options.sourceLang ?? '').trim()
     if (source !== '') fields.push(['source_lang', source]) // omitted: auto-detect
     const politeness = options.politeness
     if (politeness === 'more' || politeness === 'less') fields.push(['politeness', politeness])
@@ -185,7 +230,7 @@ export class SupertextClient {
   }
 
   /** One HTTP request with auth, retries on 429 and error mapping. Returns the body text of a 2xx answer. */
-  async #request(method: string, path: string, form?: MultipartBody): Promise<string> {
+  async #request(method: string, path: string, form?: MultipartBody, timeoutMs = this.requestTimeoutMs, returnStatus = false): Promise<string> {
     const authorization = authHeader(this.#apiKey) // throws missing_api_key before anything is sent
     // Never let the key reach a message, even if a proxy echoes the request back.
     const key = authorization.slice('Supertext-Auth-Key '.length)
@@ -196,7 +241,7 @@ export class SupertextClient {
       let response: Response
       let text: string
       try {
-        const init: RequestInit = { method, headers, signal: AbortSignal.timeout(this.requestTimeoutMs) }
+        const init: RequestInit = { method, headers, signal: AbortSignal.timeout(timeoutMs) }
         if (form) init.body = form.body
         response = await this.#fetch(this.baseUrl + path, init)
         text = await response.text()
@@ -208,7 +253,7 @@ export class SupertextClient {
         continue
       }
       if (!response.ok) throw errorForStatus(response.status, scrub(text))
-      return text
+      return returnStatus ? String(response.status) : text
     }
   }
 }

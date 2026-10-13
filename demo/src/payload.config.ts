@@ -55,6 +55,8 @@ export default buildConfig({
       collections: ['pages'],
       environment: (process.env.SUPERTEXT_ENVIRONMENT as 'live' | 'staging' | 'testing' | undefined) ?? 'live',
       globals: ['header'],
+      // de-CH, fr-CH and it-CH are Supertext codes already; `en` is no target code (en-US, en-GB are).
+      languageMap: { en: 'en-US' },
       politeness: { 'de-CH': 'more' },
     }),
   ],

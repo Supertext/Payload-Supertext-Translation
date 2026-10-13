@@ -4,6 +4,7 @@
  * to stand-in.mjs. See docs/DEVELOPER.md -> Docs screenshots.
  *
  *   BASE_URL (default http://localhost:3000 - use localhost, not 127.0.0.1, with `next dev`),
+ *   start the demo with SUPERTEXT_REPORT_URL pointing at the stand-in (never the live center),
  *   DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD
  */
 import { chromium } from 'playwright'
@@ -25,6 +26,22 @@ await page.fill('input[name=email]', EMAIL)
 await page.fill('input[name=password]', PASSWORD)
 await page.click('button[type=submit]')
 await page.waitForURL(/\/admin\/?$/, { timeout: 60000 })
+
+// --- Installation guide: the Supertext panel on the dashboard -----------------
+await page.goto(`${B}/admin`)
+const panel = page.locator('section.supertext-status')
+await panel.getByText('API key checked').waitFor({ timeout: 60000 })
+await tidy()
+// Show the live demo's ping URL, not the local one.
+await panel.evaluate((el) => {
+  const local = /https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/
+  for (const p of el.querySelectorAll('p')) {
+    if (local.test(p.textContent)) p.textContent = p.textContent.replace(local, 'https://payload-production-cfd2.up.railway.app')
+  }
+})
+await panel.scrollIntoViewIfNeeded()
+await page.waitForTimeout(500)
+await shot('status-panel', pad(await panel.boundingBox()))
 
 // The seeded home page
 const res = await page.request.get(`${B}/api/pages?where[slug][equals]=home&locale=en&limit=1`)

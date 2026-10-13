@@ -6,7 +6,8 @@ import type { SupertextTranslationOptions } from './types.js'
 
 export { collectSegments, isOptedOut } from './collect.js'
 export { createClient, ENDPOINT_BASE } from './endpoints.js'
-export { sourceCode, targetCode } from './languages.js'
+export { sourceCode, SUPERTEXT_TARGETS, targetCode } from './languages.js'
+export { PING_PATH, PLUGIN_NAME, Reporting } from './reporting.js'
 export { applyTranslations, buildHtml, parseHtml } from './segments.js'
 export { SUPERTEXT_ENVIRONMENTS, SupertextClient, SupertextError } from './supertext/client.js'
 export type { Politeness, SupertextEnvironment, SupertextErrorCode } from './supertext/client.js'
@@ -14,7 +15,10 @@ export { translateDocument } from './translate.js'
 export { SUPERTEXT_I18N_NAMESPACE, supertextTranslations } from './translations.js'
 export type { SupertextTranslationKey } from './translations.js'
 export type {
+  KeyCheckStatus,
+  LanguageStatus,
   LocaleResult,
+  StatusResponse,
   SupertextTranslationOptions,
   TranslateRequestBody,
   TranslateResponse,
@@ -22,6 +26,9 @@ export type {
 
 /** Import-map path of the admin panel component (run `payload generate:importmap` after adding the plugin). */
 export const TRANSLATE_BUTTON_PATH = 'payload-supertext-translation/client#TranslateButton'
+
+/** Import-map path of the dashboard panel (version, API key check, languages, version reports). */
+export const STATUS_PANEL_PATH = 'payload-supertext-translation/client#SupertextStatus'
 
 const button: CustomComponent = { path: TRANSLATE_BUTTON_PATH }
 
@@ -41,8 +48,20 @@ export const supertextTranslation =
     const collectionSlugs = new Set<string>(options.collections ?? [])
     const globalSlugs = new Set<string>(options.globals ?? [])
 
+    const admin =
+      options.dashboardPanel === false
+        ? incoming.admin
+        : {
+            ...incoming.admin,
+            components: {
+              ...incoming.admin?.components,
+              afterDashboard: [...(incoming.admin?.components?.afterDashboard ?? []), { path: STATUS_PANEL_PATH }],
+            },
+          }
+
     return {
       ...incoming,
+      admin,
       collections: (incoming.collections ?? []).map((collection) =>
         collectionSlugs.has(collection.slug)
           ? {

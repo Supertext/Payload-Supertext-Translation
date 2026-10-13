@@ -1,14 +1,22 @@
 import { parse } from 'node-html-parser'
 
-export type Call = { method: string; url: string; form?: FormData }
+import { Languages } from '../src/vendor/supertext-sdk/v1/index.js'
+
+export type Call = { method: string; url: string; form?: FormData; body?: string }
 
 /**
  * In-memory stand-in for the Supertext AI file API. "Translates" by prefixing every
  * segment with `[<target_lang>] `. `statuses` scripts the status sequence per file.
- * Like the real API, it rejects bare targets (`de`) and regional sources (`de-CH`).
+ * Like the real API, it accepts only Supertext's target codes (`de-CH`, `es`; not `de`, `es-ES`;
+ * HTTP 404 `INVALID_LANGUAGE_PAIR`), bare sources, and politeness only where the target offers it
+ * (HTTP 400 `FEATURE_ERROR`). It also stands in for the Commando Center: `POST …/report` is
+ * recorded in `reports` and answered with `centerStatus` (default 202).
  */
-export function fakeSupertext(opts: { statuses?: string[]; drop?: number[]; failStatus?: number; rateLimited?: number } = {}) {
+export function fakeSupertext(
+  opts: { statuses?: string[]; drop?: number[]; failStatus?: number; rateLimited?: number; centerStatus?: number } = {},
+) {
   const calls: Call[] = []
+  const reports: Record<string, unknown>[] = []
   const files = new Map<string, { html: string; target: string; polls: number }>()
   let n = 0
   let rateLimited = 0
@@ -23,6 +31,10 @@ export function fakeSupertext(opts: { statuses?: string[]; drop?: number[]; fail
       : contentType.startsWith('multipart/form-data') && init?.body
         ? await new Response(init.body as BodyInit, { headers: { 'Content-Type': contentType } }).formData()
         : undefined
+    if (method === 'POST' && url.endsWith('/report')) {
+      reports.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
+      return Response.json({ ok: true }, { status: opts.centerStatus ?? 202 })
+    }
     calls.push({ form, method, url })
 
     const auth = new Headers(init?.headers).get('Authorization')
@@ -36,8 +48,12 @@ export function fakeSupertext(opts: { statuses?: string[]; drop?: number[]; fail
     if (method === 'POST' && url.endsWith('translate/ai/file')) {
       const target = String(form?.get('target_lang') ?? '')
       const source = form?.get('source_lang')
-      if (!target.includes('-') || (typeof source === 'string' && source.includes('-'))) {
-        return new Response('{"error_code":"INVALID_LANGUAGE_PAIR"}', { status: 400 })
+      if (Languages.matchTarget(target) !== target || (typeof source === 'string' && source.includes('-'))) {
+        return new Response('{"error_code":"INVALID_LANGUAGE_PAIR"}', { status: 404 })
+      }
+      const politeness = form?.get('politeness')
+      if (typeof politeness === 'string' && Languages.supportsPoliteness(target) === false) {
+        return new Response('{"error_code":"FEATURE_ERROR","feature":"politeness"}', { status: 400 })
       }
       const file = form?.get('file') as Blob
       const id = `f${++n}`
@@ -69,5 +85,5 @@ export function fakeSupertext(opts: { statuses?: string[]; drop?: number[]; fail
     return new Response('unexpected', { status: 400 })
   }) as typeof fetch
 
-  return { calls, fetch: fetchImpl, files }
+  return { calls, fetch: fetchImpl, files, reports }
 }

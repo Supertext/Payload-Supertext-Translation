@@ -9,6 +9,8 @@ export const ErrorCode = {
   MissingApiKey: 'missing_api_key',
   AuthenticationFailure: 'authentication_failure',
   InvalidLanguagePair: 'invalid_language_pair',
+  UnsupportedLanguage: 'unsupported_language',
+  UnsupportedFeature: 'unsupported_feature',
   NotFound: 'not_found',
   PayloadTooLarge: 'payload_too_large',
   TooManyRequests: 'too_many_requests',
@@ -29,6 +31,8 @@ const MESSAGES: Record<SupertextErrorCode, string> = {
   missing_api_key: 'No Supertext API key is configured.',
   authentication_failure: 'Supertext rejected the API key. Please check it.',
   invalid_language_pair: 'Supertext does not support this language pair.',
+  unsupported_language: 'This language has no Supertext language code. Map it to a Supertext language.',
+  unsupported_feature: 'Supertext does not support this option for the language pair.',
   not_found: 'The Supertext file was not found (expired or already deleted).',
   payload_too_large: 'The document is too large for Supertext to translate.',
   too_many_requests: 'Too many requests to Supertext. Please try again shortly.',
@@ -53,6 +57,8 @@ export interface SupertextErrorDetails {
   /** For `invalid_language_pair`: the codes the API reports, when it does. */
   sourceLang?: string
   targetLang?: string
+  /** For `unsupported_feature`: the option the API names, e.g. `politeness`. */
+  feature?: string
   cause?: unknown
 }
 
@@ -63,6 +69,7 @@ export class SupertextError extends Error {
   readonly apiErrorCode?: string
   readonly sourceLang?: string
   readonly targetLang?: string
+  readonly feature?: string
 
   constructor(code: SupertextErrorCode, details: SupertextErrorDetails = {}) {
     let message = MESSAGES[code]
@@ -77,6 +84,7 @@ export class SupertextError extends Error {
     if (details.apiErrorCode) this.apiErrorCode = details.apiErrorCode
     if (details.sourceLang) this.sourceLang = details.sourceLang
     if (details.targetLang) this.targetLang = details.targetLang
+    if (details.feature) this.feature = details.feature
   }
 }
 
@@ -108,6 +116,14 @@ export function errorForStatus(status: number, body: string): SupertextError {
     const targetLang = str(json?.target_lang)
     if (sourceLang !== undefined) details.sourceLang = sourceLang
     if (targetLang !== undefined) details.targetLang = targetLang
+  } else if (status === 400 && apiErrorCode === 'FEATURE_ERROR') {
+    code = 'unsupported_feature'
+    const sourceLang = str(json?.source_lang)
+    const targetLang = str(json?.target_lang)
+    const feature = str(json?.feature)
+    if (sourceLang !== undefined) details.sourceLang = sourceLang
+    if (targetLang !== undefined) details.targetLang = targetLang
+    if (feature !== undefined) details.feature = feature
   } else if (status === 401 || status === 403) {
     code = 'authentication_failure'
   } else if (status === 404) {

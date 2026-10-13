@@ -1,9 +1,9 @@
 import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { buildConfig, getPayload, type Payload } from 'payload'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { supertextTranslation, TRANSLATE_BUTTON_PATH } from '../src/index.js'
+import { STATUS_PANEL_PATH, supertextTranslation, TRANSLATE_BUTTON_PATH } from '../src/index.js'
 import { SupertextClient } from '../src/supertext/client.js'
 import { translateDocument } from '../src/translate.js'
 import type { SupertextTranslationOptions } from '../src/types.js'
@@ -13,7 +13,9 @@ const options: SupertextTranslationOptions = {
   apiKey: 'test-key',
   collections: ['pages'],
   globals: ['header'],
-  languageMap: { 'de-CH': 'de-CH' },
+  // fr is no Supertext code (fr-CH, fr-FR are); pt stays unmapped on purpose.
+  languageMap: { fr: 'fr-FR' },
+  politeness: { 'de-CH': 'more' },
 }
 
 let payload: Payload
@@ -62,7 +64,7 @@ beforeAll(async () => {
     db: sqliteAdapter({ client: { url: ':memory:' } }),
     editor: lexicalEditor(),
     globals: [{ fields: [{ localized: true, name: 'tagline', type: 'text' }], slug: 'header' }],
-    localization: { defaultLocale: 'en', locales: ['en', 'de-CH', 'fr'] },
+    localization: { defaultLocale: 'en', locales: ['en', 'de-CH', 'fr', 'pt'] },
     plugins: [supertextTranslation(options)],
     secret: 'test-secret',
     telemetry: false,
@@ -82,6 +84,9 @@ describe('with a real Payload instance', () => {
     const paths = payload.config.endpoints.map((e) => `${e.method} ${e.path}`)
     expect(paths).toContain('post /supertext/translate')
     expect(paths).toContain('get /supertext/status')
+    expect(paths).toContain('get /supertext/ping')
+    expect(paths).toContain('post /supertext/check-key')
+    expect(JSON.stringify(payload.config.admin.components?.afterDashboard)).toContain(STATUS_PANEL_PATH)
     const pages = payload.collections.pages?.config
     expect(JSON.stringify(pages?.admin.components?.edit?.beforeDocumentControls)).toContain(TRANSLATE_BUTTON_PATH)
   })
@@ -190,10 +195,43 @@ describe('with a real Payload instance', () => {
     expect(results[0]).toMatchObject({ code: 'quota_exceeded', locale: 'fr', ok: false })
   })
 
+  it('sends nothing for a locale without a Supertext language', async () => {
+    const page = await payload.create({ collection: 'pages', data: { title: 'Unmapped' }, locale: 'en' })
+    const fake = fakeSupertext()
+    const results = await translateDocument({
+      client: client(fake),
+      collection: 'pages',
+      id: page.id,
+      options,
+      payload,
+      sourceLocale: 'en',
+      targetLocales: ['pt'],
+    })
+    expect(results[0]).toMatchObject({ code: 'unsupported_language', locale: 'pt', ok: false })
+    expect((results[0] as { error: string }).error).toContain('The language pt has no Supertext language yet')
+    expect(fake.calls).toHaveLength(0)
+  })
+
+  it('sends the formal tone where the target offers it', async () => {
+    const page = await payload.create({ collection: 'pages', data: { title: 'Formal' }, locale: 'en' })
+    const fake = fakeSupertext()
+    await translateDocument({
+      client: client(fake),
+      collection: 'pages',
+      id: page.id,
+      options,
+      payload,
+      sourceLocale: 'en',
+      targetLocales: ['de-CH'],
+    })
+    expect(fake.calls[0]?.form?.get('politeness')).toBe('more')
+    expect(fake.calls[0]?.form?.get('target_lang')).toBe('de-CH')
+  })
+
   describe('POST /api/supertext/translate', () => {
     const call = async (body: unknown, user: unknown = { id: 1 }) => {
       const endpoint = payload.config.endpoints.find((e) => e.path === '/supertext/translate')!
-      const res = await endpoint.handler({ json: async () => body, payload, user } as never)
+      const res = await endpoint.handler({ headers: new Headers({ host: 'cms.example.ch' }), json: async () => body, payload, user } as never)
       return { body: (await res.json()) as Record<string, unknown>, status: res.status }
     }
 
@@ -222,10 +260,118 @@ describe('with a real Payload instance', () => {
         const res = await call({ collection: 'pages', id: page.id, sourceLocale: 'en', targetLocales: ['de-CH'] })
         expect(res.status).toBe(200)
         expect(res.body.results).toEqual([{ locale: 'de-CH', missing: [], ok: true, segments: 1 }])
-        expect(fake.calls[0]?.url).toBe('https://api.supertext.com/v1/translate/ai/file')
+        expect(fake.calls.find((c) => c.method === 'POST')?.url).toBe('https://api.supertext.com/v1/translate/ai/file')
       } finally {
         vi.unstubAllGlobals()
       }
+    })
+  })
+
+  describe('Commando Center: status, key check, reports and ping', () => {
+    const endpoint = (method: string, path: string) =>
+      payload.config.endpoints.find((e) => e.method === method && e.path === path)!
+    const request = (extra: Record<string, unknown> = {}) =>
+      ({ headers: new Headers({ host: 'cms.example.ch', 'x-forwarded-proto': 'https' }), payload, user: { id: 1 }, ...extra }) as never
+
+    beforeAll(async () => {
+      await payload.kv.delete('supertext-reporter')
+    })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      vi.unstubAllEnvs()
+    })
+
+    it('answers the ping without login, exactly as the SDK says', async () => {
+      const ping = endpoint('get', '/supertext/ping')
+      const ok = await ping.handler({ payload, searchParams: new URLSearchParams('challenge=abcdefghijklmnop'), user: null } as never)
+      expect(ok.status).toBe(200)
+      expect(ok.headers.get('cache-control')).toBe('no-store')
+      expect(await ok.json()).toEqual({ challenge: 'abcdefghijklmnop', ok: true, plugin: 'Payload-Supertext-Translation' })
+      const bad = await ping.handler({ payload, searchParams: new URLSearchParams('challenge=<script>'), user: null } as never)
+      expect(bad.status).toBe(400)
+      vi.stubEnv('SUPERTEXT_VERSION_REPORTS', '0')
+      const off = await ping.handler({ payload, searchParams: new URLSearchParams('challenge=abcdefghijklmnop'), user: null } as never)
+      expect(off.status).toBe(404)
+    })
+
+    it('reports the installation once from the status endpoint and shows the key check', async () => {
+      const fake = fakeSupertext()
+      vi.stubGlobal('fetch', fake.fetch)
+      vi.stubEnv('SUPERTEXT_REPORT_URL', 'https://center.test/api/v1/report')
+      const status = endpoint('get', '/supertext/status')
+
+      const first = await status.handler(request())
+      const body = (await first.json()) as Record<string, any>
+      expect(body.languages).toEqual([
+        { locale: 'en', politeness: 'default', politenessSupported: true, supertext: null }, // `en` is no target code
+        { locale: 'de-CH', politeness: 'more', politenessSupported: true, supertext: 'de-CH' },
+        { locale: 'fr', politeness: 'default', politenessSupported: true, supertext: 'fr-FR' },
+        { locale: 'pt', politeness: 'default', politenessSupported: true, supertext: null },
+      ])
+      expect(body.version).toMatch(/^\d+\.\d+\.\d+/)
+      expect(body.reports).toEqual({ enabled: true, pingUrl: 'https://cms.example.ch/api/supertext/ping' })
+
+      await vi.waitFor(() => expect(fake.reports).toHaveLength(1))
+      const report = fake.reports[0]!
+      expect(report).toMatchObject({
+        api_key_check: { http_status: 200, status: 'ok' },
+        api_key_configured: true,
+        callback: { url: 'https://cms.example.ch/api/supertext/ping' },
+        event: 'installed',
+        plugin: { name: 'Payload-Supertext-Translation', version: body.version },
+        schema: 1,
+        site_url: 'https://cms.example.ch',
+        system: { name: 'Payload' },
+      })
+      expect((report.system as { version?: string }).version).toMatch(/^3\./)
+      expect(JSON.stringify(report)).not.toContain('test-key')
+      const stored = await payload.kv.get<Record<string, unknown>>('supertext-reporter')
+      expect(stored).toMatchObject({ reportedKeyStatus: 'ok' })
+      expect(JSON.stringify(stored)).not.toContain('test-key')
+
+      // Same versions, same key: nothing more to report; the check is shown.
+      const second = (await (await status.handler(request())).json()) as Record<string, any>
+      expect(second.keyCheck).toMatchObject({ httpStatus: 200, status: 'ok' })
+      expect(second.keyCheck).not.toHaveProperty('fingerprint')
+      await new Promise((r) => setTimeout(r, 50))
+      expect(fake.reports).toHaveLength(1)
+    })
+
+    it('reports a rejected key after a 401 from a translation', async () => {
+      const page = await payload.create({ collection: 'pages', data: { title: 'Key' }, locale: 'en' })
+      const fake = fakeSupertext({ failStatus: 401 })
+      vi.stubGlobal('fetch', fake.fetch)
+      vi.stubEnv('SUPERTEXT_REPORT_URL', 'https://center.test/api/v1/report')
+      const res = await endpoint('post', '/supertext/translate').handler(
+        request({ json: async () => ({ collection: 'pages', id: page.id, sourceLocale: 'en', targetLocales: ['de-CH'] }) }),
+      )
+      expect(res.status).toBe(502)
+      await vi.waitFor(() => expect(fake.reports.map((r) => r.event)).toContain('api_key_check'))
+      expect(fake.reports.at(-1)).toMatchObject({ api_key_check: { http_status: 401, status: 'invalid' } })
+    })
+
+    it('checks the key again on request', async () => {
+      const fake = fakeSupertext()
+      vi.stubGlobal('fetch', fake.fetch)
+      vi.stubEnv('SUPERTEXT_REPORT_URL', 'https://center.test/api/v1/report')
+      const res = await endpoint('post', '/supertext/check-key').handler(request())
+      expect(await res.json()).toMatchObject({ keyCheck: { status: 'ok' } })
+      expect(fake.calls.map((c) => `${c.method} ${c.url}`)).toContain('GET https://api.supertext.com/v1/features')
+      expect(fake.reports.at(-1)).toMatchObject({ api_key_check: { status: 'ok' }, event: 'api_key_check' })
+      expect((await endpoint('post', '/supertext/check-key').handler({ ...(request() as object), user: null } as never)).status).toBe(401)
+    })
+
+    it('sends nothing with reports off, but still checks the key', async () => {
+      const fake = fakeSupertext()
+      vi.stubGlobal('fetch', fake.fetch)
+      vi.stubEnv('SUPERTEXT_REPORT_URL', 'https://center.test/api/v1/report')
+      vi.stubEnv('SUPERTEXT_VERSION_REPORTS', '0')
+      const res = await endpoint('post', '/supertext/check-key').handler(request())
+      expect(await res.json()).toMatchObject({ keyCheck: { status: 'ok' } })
+      const status = (await (await endpoint('get', '/supertext/status').handler(request())).json()) as Record<string, any>
+      expect(status.reports).toEqual({ enabled: false, pingUrl: null })
+      await new Promise((r) => setTimeout(r, 50))
+      expect(fake.reports).toHaveLength(0)
     })
   })
 })

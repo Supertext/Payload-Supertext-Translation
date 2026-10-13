@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { sourceCode, targetCode } from '../src/languages.js'
+import { politenessForTarget, sourceCode, targetCode, targetCodeOrNull } from '../src/languages.js'
 import { SupertextClient, SupertextError } from '../src/supertext/client.js'
 import { fakeSupertext } from './fakeSupertext.js'
 
@@ -96,27 +96,43 @@ describe('language codes', () => {
     expect(sourceCode('pt_BR')).toBe('pt')
     expect(sourceCode('EN-us')).toBe('en')
   })
-  it('gives a bare target its default region', () => {
-    expect(targetCode('de')).toBe('de-DE')
-    expect(targetCode('en')).toBe('en-US')
-    expect(targetCode('sl')).toBe('sl-SI')
-    expect(targetCode('ZH')).toBe('zh-CN')
-  })
-  it('keeps a regional target and normalizes case and underscores', () => {
+  it('uses a locale that is a Supertext code, apart from case and underscores', () => {
     expect(targetCode('de-CH')).toBe('de-CH')
     expect(targetCode('de_ch')).toBe('de-CH')
     expect(targetCode('fr-ch')).toBe('fr-CH')
     expect(targetCode('zh-hant')).toBe('zh-Hant')
-    expect(targetCode('es-419')).toBe('es-419')
+    expect(targetCode('es')).toBe('es')
+    expect(targetCode('NL')).toBe('nl')
+  })
+  it('guesses no region: unmapped locales are an unsupported_language error', () => {
+    for (const locale of ['de', 'en', 'fr', 'zh', 'es-ES', 'sl-SI', 'xx']) {
+      expect(() => targetCode(locale), locale).toThrow(SupertextError)
+      expect(targetCodeOrNull(locale), locale).toBeNull()
+    }
+    const err = (() => {
+      try {
+        targetCode('de')
+      } catch (e) {
+        return e
+      }
+    })()
+    expect(err).toMatchObject({ code: 'unsupported_language', targetLang: 'de' })
   })
   it('lets the mapping win', () => {
+    expect(targetCode('de', { de: 'de-CH' })).toBe('de-CH')
     expect(targetCode('ch', { ch: 'de-CH' })).toBe('de-CH')
-    expect(targetCode('de', { de: 'de-AT' })).toBe('de-AT')
+    expect(targetCode('zh', { zh: 'zh-Hans' })).toBe('zh-Hans')
+    // One map serves both directions: as a source, the mapped code's language is sent.
     expect(sourceCode('ch', { ch: 'de-CH' })).toBe('de')
+    expect(sourceCode('de', { de: 'de-CH' })).toBe('de')
+    expect(sourceCode('no', { no: 'nb' })).toBe('nb')
   })
-  it('sends unknown bare codes unchanged', () => {
-    expect(targetCode('xx')).toBe('xx')
-    expect(targetCode('ch')).toBe('ch')
+  it('refuses a tone the target lacks, before sending', () => {
+    expect(politenessForTarget('de-CH', 'de-CH', { 'de-CH': 'more' })).toBe('more')
+    expect(politenessForTarget('en-US', 'en-US', {})).toBe('default')
+    expect(() => politenessForTarget('en-US', 'en-US', { 'en-US': 'less' })).toThrow(
+      expect.objectContaining({ code: 'unsupported_feature', feature: 'politeness' }),
+    )
   })
 })
 
@@ -150,7 +166,7 @@ describe('rate limiting', () => {
   })
 
   it('honours Retry-After', async () => {
-    const { retryDelayMs } = await import('../src/vendor/supertext-sdk/index.js')
+    const { retryDelayMs } = await import('../src/vendor/supertext-sdk/v1/index.js')
     expect(retryDelayMs(0, '3')).toBe(3000)
     expect(retryDelayMs(1, null)).toBeGreaterThanOrEqual(2000)
   })

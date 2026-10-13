@@ -6,16 +6,16 @@
  *   2. GET    translate/ai/file/{id}/status         poll until `done`
  *   3. GET    translate/ai/file/{id}/translation    download the translated HTML
  *   4. DELETE translate/ai/file/{id}                cleanup, also after errors
- * plus the `Authorization: Supertext-Auth-Key <key>` header (a pasted prefix is stripped),
- * HTTP 429 retries and the language codes (bare source, regional target).
+ * plus the `Authorization: Supertext-Auth-Key <key>` header (a pasted prefix is stripped) and
+ * HTTP 429 retries. Language codes are sent as given: resolve them with `src/languages.ts` first.
  *
  * No Payload imports here (tested on its own).
  */
-import { LIVE_BASE_URL, SupertextClient as SdkClient, SupertextError } from '../vendor/supertext-sdk/index.js'
-import type { ErrorCode, FetchLike, Politeness } from '../vendor/supertext-sdk/index.js'
+import { LIVE_BASE_URL, SupertextClient as SdkClient, SupertextError } from '../vendor/supertext-sdk/v1/index.js'
+import type { ApiKeyCheck, ErrorCode, FetchLike, Politeness } from '../vendor/supertext-sdk/v1/index.js'
 
 export { SupertextError }
-export type { Politeness }
+export type { ApiKeyCheck, Politeness }
 export type SupertextErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
 
 export const SUPERTEXT_ENVIRONMENTS = {
@@ -44,9 +44,9 @@ export type SupertextClientOptions = {
 
 export type TranslateFileArgs = {
   html: string
-  /** Any form (`de`, `de_ch`): sent as a regional code. */
+  /** A Supertext target code (`de-CH`, `es`), sent as given. */
   targetLang: string
-  /** Any form: sent as the bare language; omit for auto-detection. */
+  /** A Supertext source code (`en`), sent as given; omit for auto-detection. */
   sourceLang?: string
   politeness?: Politeness
 }
@@ -72,8 +72,13 @@ export class SupertextClient {
     return this.sdk.translateHtml(html, targetLang, { sourceLang: sourceLang ?? null, politeness: politeness ?? 'default' })
   }
 
-  /** Cost-free check that the API key is accepted (`GET features`). */
+  /** Cost-free check that the API key is accepted (`GET features`). Throws a `SupertextError`. */
   validateApiKey(): Promise<void> {
     return this.sdk.validateApiKey()
+  }
+
+  /** The same check as a result (`ok`, `invalid`, `missing`, `unreachable`, `error`); never throws. */
+  checkApiKey(): Promise<ApiKeyCheck> {
+    return this.sdk.checkApiKey()
   }
 }
