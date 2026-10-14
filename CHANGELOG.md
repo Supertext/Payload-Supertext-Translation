@@ -32,6 +32,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- **One language map for both directions** (bundled Supertext SDK 0.2.1, commit `eeba8fa`): a mapped locale is sent as a source in its source form (`{ de: 'de-CH' }` translates from `de`), so English as the source no longer fails with an `{ en: 'en-US' }` mapping.
+
 - Bare locales such as `de` were sent as bare targets, which Supertext rejected with `INVALID_LANGUAGE_PAIR`. (An interim fix gave them a default region; that is replaced by the language mapping above.) Regional codes are matched regardless of case and `_`/`-` (`de_ch` → `de-CH`).
 
 ## [0.1.0] - 2026-10-07

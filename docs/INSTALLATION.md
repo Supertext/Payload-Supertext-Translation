@@ -109,7 +109,7 @@ Each Payload locale needs a Supertext language. Supertext accepts exactly these 
 
 - A locale that **is** one of these codes (apart from upper/lower case and `_`/`-`) is used as it is: `de-CH`, `fr_ch`, `es`, `nl`.
 - **Every other locale needs an entry in `languageMap`**, e.g. `en` → `en-US`, `de` → `de-CH`, `zh` → `zh-Hans`. The plugin never guesses a region: an unmapped locale is shown as *no Supertext language yet* in the Translate menu (it can't be ticked), as *Not mapped* on the Supertext panel, and a translation into it through the API fails with *has no Supertext language yet*; nothing is sent for it.
-- **The source language** is sent without region (`de-CH` → `de`); for a mapped locale, the language of the mapped code is used. A locale that is only a source (often the default locale) needs no entry, but it can't be translated into without one.
+- **The source language** is sent without region (`de-CH` → `de`); for a mapped locale, the language of the mapped code is used, so one entry serves both directions (`en` → `en-US` translates into `en-US` and from `en`). A locale that is only a source (often the default locale) needs no entry, but it can't be translated into without one.
 - **Formal/informal** (`politeness`) is offered for every target except English, Swiss German, Romansh, Albanian and Serbian. For those, leave the tone on `default`: a `more`/`less` setting makes the translation fail with *Supertext offers no formal or informal tone for this language* (nothing is sent), and the Supertext panel warns about it.
 
 ```ts

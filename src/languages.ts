@@ -24,16 +24,13 @@ export function targetCodeOrNull(locale: string, map: Record<string, string> = {
   }
 }
 
-const sameCode = (a: string, b: string) => a.trim().replace(/_/g, '-').toLowerCase() === b.trim().replace(/_/g, '-').toLowerCase()
-
 /**
- * The source code: the language of the mapped code, else of the locale (`de-CH` → `de`).
- * `languageMap` holds target codes (`{ de: 'de-CH' }`), and Supertext wants bare sources, so a
- * mapped value is reduced to its language instead of being sent as it is.
+ * The source code: the SDK's `Languages.source()` with the same `languageMap`, which sends a
+ * mapped value in its source form (`{ de: 'de-CH' }` → `de`), so one map serves both
+ * directions; else the locale's language (`de-CH` → `de`).
  */
 export function sourceCode(locale: string, map: Record<string, string> = {}): string {
-  const mapped = Object.entries(map).find(([from, to]) => sameCode(from, locale) && typeof to === 'string' && to.trim() !== '')?.[1]
-  return Languages.source(mapped ?? locale)
+  return Languages.source(locale, map)
 }
 
 export function politenessFor(locale: string, map: Record<string, Politeness> = {}): Politeness {

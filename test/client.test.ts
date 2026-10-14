@@ -126,6 +126,8 @@ describe('language codes', () => {
     expect(sourceCode('ch', { ch: 'de-CH' })).toBe('de')
     expect(sourceCode('de', { de: 'de-CH' })).toBe('de')
     expect(sourceCode('no', { no: 'nb' })).toBe('nb')
+    expect(targetCode('en', { en: 'en-US' })).toBe('en-US')
+    expect(sourceCode('en', { en: 'en-US' })).toBe('en')
   })
   it('refuses a tone the target lacks, before sending', () => {
     expect(politenessForTarget('de-CH', 'de-CH', { 'de-CH': 'more' })).toBe('more')

@@ -102,7 +102,7 @@ Supertext accepts exactly the codes of its `GET features` list (the SDK's `Langu
 `src/languages.ts`, no guessing:
 
 - `targetCode(locale, languageMap)` = `Languages.target()`: the `languageMap` entry wins (sent as given), else a locale equal to a Supertext code apart from case and `_`/`-` (`de_ch` → `de-CH`, `es`), else `SupertextError('unsupported_language')` and nothing is sent. `targetCodeOrNull` is the same without throwing (status panel, Translate menu).
-- `sourceCode(locale, languageMap)`: `Languages.source()` of the mapped code, else of the locale (`de-CH` → `de`). The plugin has one map for both directions, holding target codes, so a mapped value is reduced to its language rather than sent as it is (the SDK's `Languages.source(code, mapping)` would send `de-CH` as the source).
+- `sourceCode(locale, languageMap)`: the SDK's `Languages.source(locale, languageMap)`. One map serves both directions: a mapped value is sent in its source form (`{ de: 'de-CH' }` → `de`, `{ en: 'en-US' }` → `en`), else the locale's language (`de-CH` → `de`).
 - `politenessForTarget(locale, target, politeness)`: `more`/`less` for a target where `Languages.supportsPoliteness()` is false throws `unsupported_feature` before anything is sent, so a setting is never dropped silently; the status panel shows the same as a warning.
 
 `test/fakeSupertext.ts` accepts exactly the SDK's target list (HTTP 404 otherwise), bare sources, and politeness only where offered (HTTP 400 `FEATURE_ERROR`), like the live API.
