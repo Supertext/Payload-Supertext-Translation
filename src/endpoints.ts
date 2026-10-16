@@ -60,8 +60,9 @@ export function languageStatus(locales: string[], options: SupertextTranslationO
   })
 }
 
-const publicCheck = (check: KeyCheckStatus | null): KeyCheckStatus | null =>
-  check && { checkedAt: check.checkedAt, errorCode: check.errorCode, httpStatus: check.httpStatus, status: check.status }
+/** The stored key check (Plugin Health's `KeyCheck`, status as a string) without the fingerprint. */
+const publicCheck = (check: (Omit<KeyCheckStatus, 'status'> & { status: string }) | null): KeyCheckStatus | null =>
+  check && { checkedAt: check.checkedAt, errorCode: check.errorCode, httpStatus: check.httpStatus, status: check.status as KeyCheckStatus['status'] }
 
 export function createEndpoints(
   options: SupertextTranslationOptions,

@@ -1,8 +1,9 @@
 /**
  * Version reports to the Supertext Commando Center, the automatic API key check and the
  * callback ping (Commando-Center-Supertext-Translation → docs/DEVELOPER.md → Report protocol).
- * The protocol is the SDK's (`InstallationReporter`, `pingResponse`); this file only gives it
- * what Payload knows: the site URL, the Payload and plugin versions, and a place to keep the
+ * The protocol is Supertext Plugin Health's (`InstallationReporter`, `pingResponse`; copied into
+ * src/vendor/supertext-plugin-health), the key check the Supertext SDK's (`checkApiKey()`,
+ * `apiKeyFingerprint`). This file only gives them what Payload knows: the site URL, the Payload and plugin versions, and a place to keep the
  * reporter's state (Payload's key-value store, `payload.kv`, key `supertext-reporter`).
  *
  * The plugin's settings are code (plugin options and environment variables), so there is no
@@ -16,8 +17,10 @@ import {
   pingResponse,
   reporterState,
   reportsEnabled,
-} from './vendor/supertext-sdk/v1/index.js'
-import type { ApiKeyCheck, PingResponse, ReporterOptions, ReporterResult, ReporterState } from './vendor/supertext-sdk/v1/index.js'
+} from './vendor/supertext-plugin-health/index.js'
+import type { KeyCheck, PingResponse, ReporterOptions, ReporterResult, ReporterState } from './vendor/supertext-plugin-health/index.js'
+import { apiKeyFingerprint, SupertextClient } from './vendor/supertext-sdk/v1/index.js'
+import type { SupertextClientOptions } from './vendor/supertext-sdk/v1/index.js'
 import { SDK_VERSION } from './vendor/supertext-sdk/version.js'
 import { payloadVersion, pluginVersion } from './versions.js'
 
@@ -82,8 +85,8 @@ export type ReportingOptions = {
   versionReports?: boolean
   /** Base URL for the key check (the plugin's `apiUrl`/`environment`). */
   apiBaseUrl: string
-  /** Tests: options passed to the SDK reporter (fetch, report URL, clock, client options). */
-  reporterOverrides?: Partial<ReporterOptions>
+  /** Tests: options passed to Plugin Health's reporter (fetch, report URL, clock) and the SDK client of the key check. */
+  reporterOverrides?: Partial<ReporterOptions> & { clientOptions?: SupertextClientOptions }
 }
 
 type Action = 'onRequest' | 'testConnection' | 'authenticationFailed'
@@ -119,14 +122,22 @@ export class Reporting {
   }
 
   reporter(payload: Payload, url: string): InstallationReporter {
+    const { clientOptions: overrideClientOptions, ...overrides } = this.options.reporterOverrides ?? {}
+    const clientOptions: SupertextClientOptions = {
+      baseUrl: this.options.apiBaseUrl,
+      userAgent: 'payload-supertext-translation',
+      ...(overrides.now ? { now: overrides.now } : {}),
+      ...overrideClientOptions,
+    }
     return new InstallationReporter({
       callbackUrl: this.callbackUrl(payload, url),
-      clientOptions: { baseUrl: this.options.apiBaseUrl, userAgent: 'payload-supertext-translation' },
       enabled: this.enabled,
+      keyChecker: { check: (apiKey) => new SupertextClient(apiKey, clientOptions).checkApiKey(), fingerprint: apiKeyFingerprint },
       plugin: { name: PLUGIN_NAME, version: pluginVersion() ?? '0.0.0' },
       siteUrl: url,
+      sdkVersion: SDK_VERSION,
       system: { name: 'Payload', version: payloadVersion() },
-      ...this.options.reporterOverrides,
+      ...overrides,
     })
   }
 
@@ -168,7 +179,7 @@ export class Reporting {
   }
 
   /** The latest stored key check (for the status panel), or null. */
-  async lastCheck(payload: Payload): Promise<ApiKeyCheck | null> {
+  async lastCheck(payload: Payload): Promise<KeyCheck | null> {
     try {
       return (await this.store(payload).load()).keyCheck
     } catch {

@@ -7,7 +7,7 @@ src/
   index.ts                 plugin factory: adds endpoints, the Translate control and the dashboard panel
   types.ts                 plugin options and endpoint request/response types
   endpoints.ts             /api/supertext/status, /translate, /check-key, /ping (auth, validation)
-  reporting.ts             Commando Center glue: site URL, state in payload.kv, when the SDK reporter runs
+  reporting.ts             Commando Center glue: site URL, state in payload.kv, when Plugin Health's reporter runs
   versions.ts              plugin version (its package.json) and Payload version at runtime
   translate.ts             translateDocument(): read source locale → collect → Supertext → write target locales
   collect.ts               walks the field schema + document; returns Segments and the update payload
@@ -16,7 +16,9 @@ src/
   languages.ts             Payload locale → Supertext code (the SDK's Languages, no guessing)
   supertext/client.ts      the plugin's Supertext client on top of the Supertext SDK (no Payload dependency)
   vendor/supertext-sdk/    Supertext SDK sources (TypeScript), compiled with the plugin; see *Supertext SDK*
+  vendor/supertext-plugin-health/  Supertext Plugin Health sources (TypeScript), compiled with the plugin; see *Supertext Plugin Health*
 scripts/vendor-sdk.sh      updates src/vendor/supertext-sdk
+scripts/vendor-plugin-health.sh  updates src/vendor/supertext-plugin-health
   translations.ts          UI and error strings in en/de/fr/it (namespace `supertext`)
   i18n.ts                  merges them into config.i18n.translations; req.t()-based messages for the endpoints
   components/TranslateButton.tsx   client component in the edit view header
@@ -77,7 +79,7 @@ AI file translation API v1, same as the WordPress plugin and every other Superte
 | Poll | `GET translate/ai/file/{id}/status` | `translating` → keep polling; `done`; `error`; `limit_exceeded`; `deleted`. |
 | Download | `GET translate/ai/file/{id}/translation` | Translated HTML. |
 | Delete | `DELETE translate/ai/file/{id}` | Always attempted, also after errors; files expire after 24 h. |
-| Key check | `GET features` | Cost-free (`SupertextClient.checkApiKey`, through the SDK reporter; see *Commando Center*). |
+| Key check | `GET features` | Cost-free (the SDK's `SupertextClient.checkApiKey`, run by Plugin Health's reporter; see *Commando Center*). |
 
 Errors are the SDK's `SupertextError` with a stable `code`: `missing_api_key`, `authentication_failure` (401/403), `invalid_language_pair` (404 `INVALID_LANGUAGE_PAIR`), `unsupported_language` (the locale has no Supertext code; nothing sent; `targetLang`/`sourceLang` name it, shown as `{{language}}`), `unsupported_feature` (400 `FEATURE_ERROR`, e.g. politeness for `en-US`), `not_found` (404), `payload_too_large` (413), `too_many_requests` (429), `service_unavailable` (5xx), `unexpected_status`, `transport_error`, `no_file_id`, `translation_error`, `quota_exceeded`, `file_deleted`, `timeout`, `incomplete_response`; `detail` carries the API's own text (at most 200 characters). Each code has an `error_<code>` message in all four languages. The API key never appears in messages.
 
@@ -85,7 +87,7 @@ Errors are the SDK's `SupertextError` with a stable `code`: `missing_api_key`, `
 
 ### Supertext SDK
 
-All Supertext calls go through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`), the shared client of all Supertext plugins. Its TypeScript sources (the whole `src/` tree, with the API in the versioned folder `v1/`) are copied into `src/vendor/supertext-sdk/` and compiled with the plugin into `dist/vendor/supertext-sdk/`, so sites install nothing besides the plugin; `COMMIT` and `VERSION` name the SDK commit and version. Never edit the copy: fix the SDK repository and copy it again:
+All Supertext calls go through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`), the shared client of all Supertext plugins: it provides the client and the API key check (`checkApiKey()`, `apiKeyFingerprint`, `SDK_VERSION`); version reports and the ping are in *Supertext Plugin Health* (below). Its TypeScript sources (the whole `src/` tree, with the API in the versioned folder `v1/`) are copied into `src/vendor/supertext-sdk/` and compiled with the plugin into `dist/vendor/supertext-sdk/`, so sites install nothing besides the plugin; `COMMIT` and `VERSION` name the SDK commit and version. Never edit the copy: fix the SDK repository and copy it again:
 
 ```bash
 scripts/vendor-sdk.sh                  # latest main of the SDK repository
@@ -94,6 +96,18 @@ SDK_DIR=../Supertext-API-SDK-and-Guide scripts/vendor-sdk.sh   # a local clone
 ```
 
 Then run typecheck, tests and build, and note the update in `CHANGELOG.md`. The plugin imports the API from `src/vendor/supertext-sdk/v1/index.js` (the SDK's `supertext-sdk/v1`) and `SDK_VERSION` from `src/vendor/supertext-sdk/version.js`. `src/supertext/client.ts` wraps the SDK client (options in milliseconds, a `fetch` for tests, the User-Agent `supertext-sdk-typescript payload-supertext-translation`) and keeps the plugin's exported `SupertextClient`, `SupertextError` and `SUPERTEXT_ENVIRONMENTS`.
+
+### Supertext Plugin Health
+
+[Supertext Plugin Health](https://github.com/Supertext/Commando-Center-Supertext-Translation/tree/main/plugin-health) (`plugin-health/typescript` in the Commando Center repository) sends the version reports and the API key check result to the Supertext Commando Center and answers its reachability ping (`InstallationReporter`, `reportsEnabled()`, `reporterState()`, `pingResponse()`; see *Commando Center*). It has no dependencies and doesn't need the SDK: `src/reporting.ts` passes in the SDK's `SDK_VERSION` and a key checker built from the SDK's `checkApiKey()` and `apiKeyFingerprint`. Like the SDK, its sources are copied into `src/vendor/supertext-plugin-health/` (imported from `src/vendor/supertext-plugin-health/index.js`) and compiled with the plugin; `COMMIT` and `VERSION` name the commit and version. Never edit the copy: fix it in Commando-Center-Supertext-Translation/plugin-health and copy it again:
+
+```bash
+scripts/vendor-plugin-health.sh plugin-health-v0.1.0   # a release tag
+scripts/vendor-plugin-health.sh                        # latest main of the Commando Center repository
+PLUGIN_HEALTH_DIR=../Commando-Center-Supertext-Translation scripts/vendor-plugin-health.sh   # a local clone
+```
+
+Then run typecheck, tests and build, and note the update in `CHANGELOG.md`.
 
 ### Language codes
 
@@ -109,13 +123,13 @@ Supertext accepts exactly the codes of its `GET features` list (the SDK's `Langu
 
 ### Commando Center (version reports, API key check, ping)
 
-The protocol is the SDK's (`InstallationReporter`, `pingResponse`, `reporterState`, `reportsEnabled`; Commando-Center-Supertext-Translation → `docs/DEVELOPER.md` → *Report protocol*). `src/reporting.ts` only supplies what Payload knows:
+The protocol is Supertext Plugin Health's (`InstallationReporter`, `pingResponse`, `reporterState`, `reportsEnabled`; Commando-Center-Supertext-Translation → `docs/DEVELOPER.md` → *Report protocol*); the key check is the SDK's `checkApiKey()` with `apiKeyFingerprint`, passed in as the reporter's key checker (the SDK client gets the plugin's API address and User-Agent). `src/reporting.ts` only supplies what Payload knows:
 
-- **Options:** `plugin.name` = `Payload-Supertext-Translation` (the GitHub repo name), `plugin.version` from the plugin's `package.json` (`src/versions.ts`: searched upwards from the module, else in `<cwd>/node_modules`, because Next.js bundles the plugin), `system` = `Payload` and the version of the app's `payload` package, runtime and SDK version from the SDK, `siteUrl` = `config.serverURL`, else the request's `x-forwarded-host`/`host` (and `x-forwarded-proto`), `callbackUrl` = `<siteUrl><routes.api>/supertext/ping`.
+- **Options:** `plugin.name` = `Payload-Supertext-Translation` (the GitHub repo name), `plugin.version` from the plugin's `package.json` (`src/versions.ts`: searched upwards from the module, else in `<cwd>/node_modules`, because Next.js bundles the plugin), `system` = `Payload` and the version of the app's `payload` package, runtime from Plugin Health, `sdkVersion` = the SDK's `SDK_VERSION`, `siteUrl` = `config.serverURL`, else the request's `x-forwarded-host`/`host` (and `x-forwarded-proto`), `callbackUrl` = `<siteUrl><routes.api>/supertext/ping`.
 - **Setting:** the `versionReports` option (default on); `SUPERTEXT_VERSION_REPORTS` wins (`reportsEnabled`). `SUPERTEXT_REPORT_URL` points reports elsewhere (tests, screenshots).
-- **When:** the settings are code, so there is no `afterSettingsSaved`. `onRequest` runs in the background on `GET /status` (the Translate control and the dashboard panel load it) and `POST /translate`; the SDK checks the key when its fingerprint changed and reports `installed`, `upgraded` or a changed key status. `authenticationFailed` runs when a translation came back with `authentication_failure` (401/403). `testConnection` runs on `POST /check-key` (*Check again* on the panel), which waits for the result and returns it.
-- **State:** `payload.kv` (Payload's key-value store; by default the `payload-kv` collection Payload adds itself, so the plugin needs no migration), key `supertext-reporter`, the SDK's `ReporterState` as JSON. Without `payload.kv` (older Payload 3) it is kept in memory. The fingerprint stays there; the endpoints return the check without it. Calls are queued (one at a time per plugin instance) and never throw: storage errors are logged at debug level and swallowed.
-- **Ping:** `GET /api/supertext/ping` (`Reporting.ping` → `pingResponse`), public, status, headers (`Content-Type`, `Cache-Control: no-store`) and body exactly as the SDK returns them; 404 while reports are off.
+- **When:** the settings are code, so there is no `afterSettingsSaved`. `onRequest` runs in the background on `GET /status` (the Translate control and the dashboard panel load it) and `POST /translate`; the reporter checks the key when its fingerprint changed and reports `installed`, `upgraded` or a changed key status. `authenticationFailed` runs when a translation came back with `authentication_failure` (401/403). `testConnection` runs on `POST /check-key` (*Check again* on the panel), which waits for the result and returns it.
+- **State:** `payload.kv` (Payload's key-value store; by default the `payload-kv` collection Payload adds itself, so the plugin needs no migration), key `supertext-reporter`, Plugin Health's `ReporterState` as JSON (the same format the SDK 0.1–0.2 reporter stored, so the switch kept the history: no new `installed` report). Without `payload.kv` (older Payload 3) it is kept in memory. The fingerprint stays there; the endpoints return the check without it. Calls are queued (one at a time per plugin instance) and never throw: storage errors are logged at debug level and swallowed.
+- **Ping:** `GET /api/supertext/ping` (`Reporting.ping` → `pingResponse`), public, status, headers (`Content-Type`, `Cache-Control: no-store`) and body exactly as Plugin Health returns them; 404 while reports are off.
 
 ## Endpoints
 

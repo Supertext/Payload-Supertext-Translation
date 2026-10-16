@@ -1,20 +1,43 @@
 /**
- * Version reporting to the Supertext Commando Center, the automatic API key check
- * and the callback ping (spec/reporting.json; protocol: Commando-Center-Supertext-Translation
- * → docs/DEVELOPER.md → Report protocol).
+ * Supertext Plugin Health: version reports to the Supertext Commando Center, the API key check
+ * result and the plugin's ping endpoint (../spec/reporter.json; protocol: the Commando Center's
+ * docs/DEVELOPER.md → Report protocol).
  *
- * The reporter is stateless: the plugin loads its `ReporterState` (a plain JSON
- * object), passes it in, and stores the state it gets back.
+ * The reporter is stateless: the plugin loads its `ReporterState` (a plain JSON object), passes it
+ * in, and stores the state it gets back. It never talks to Supertext itself: the plugin passes a
+ * key checker built on the Supertext SDK (`client.checkApiKey()` and `apiKeyFingerprint()`).
  */
-import { apiKeyFingerprint, isoSeconds, type ApiKeyCheck } from './api-key-check.js'
-import { SupertextClient, type FetchLike, type SupertextClientOptions } from './client.js'
-import { SDK_VERSION } from '../version.js'
 
+export const PLUGIN_HEALTH_VERSION = '0.1.0'
 export const DEFAULT_REPORT_URL = 'https://commandocenter-production.up.railway.app/api/v1/report'
 export const REPORT_TIMEOUT_MS = 3_000
 export const FAILURE_BACKOFF_MS = 3_600_000
 
 export type ReportEvent = 'installed' | 'settings_saved' | 'upgraded' | 'api_key_check' | 'check'
+
+/** The result of the SDK's API key check, as the reporter stores and reports it. */
+export interface KeyCheck {
+  /** `ok`, `invalid`, `missing`, `unreachable` or `error` (the SDK's statuses). */
+  status: string
+  /** When the check ran: UTC ISO 8601 without fractions (`2026-10-13T08:00:00Z`). */
+  checkedAt: string
+  /** The HTTP status Supertext answered with; null without an answer. */
+  httpStatus: number | null
+  /** Supertext's `error_code`; null if none. */
+  errorCode: string | null
+  /** SHA-256 of the key, to notice a changed key. Kept locally, never sent. '' for a blank key. */
+  fingerprint: string
+}
+
+/**
+ * How the reporter checks the API key. Plugins pass the Supertext SDK's functions:
+ * `{ check: (key) => new SupertextClient(key).checkApiKey(), fingerprint: apiKeyFingerprint }`
+ * (the SDK's ApiKeyCheck has the same fields as KeyCheck).
+ */
+export interface KeyChecker {
+  check(apiKey: string): Promise<KeyCheck> | KeyCheck
+  fingerprint(apiKey: string): string
+}
 
 /** What the plugin stores between requests (as JSON, unchanged). */
 export interface ReporterState {
@@ -25,13 +48,19 @@ export interface ReporterState {
   /** When the last report failed (no new attempt for an hour). */
   lastFailureAt: string | null
   /** The latest key check. */
-  keyCheck: ApiKeyCheck | null
+  keyCheck: KeyCheck | null
 }
 
 export interface NameVersion {
   name: string
   version?: string | null
 }
+
+/** What `fetch` the reporter needs (tests pass a fake). */
+export type FetchLike = (input: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{
+  status: number
+  body?: { cancel(): Promise<void> } | null
+}>
 
 export interface ReporterOptions {
   /** The "Send version information to Supertext" setting combined with the environment: see `reportsEnabled()`. */
@@ -42,16 +71,16 @@ export interface ReporterOptions {
   plugin: { name: string; version: string }
   /** The CMS, PIM, shop or application, in its own spelling. */
   system: NameVersion
+  /** The bundled Supertext SDK's version (its `SDK_VERSION`), or null without the SDK. */
+  sdkVersion: string | null
+  /** The SDK's key check: see `KeyChecker`. */
+  keyChecker: KeyChecker
   /** Default: Node.js (or Deno/Bun) and its version. */
   runtime?: NameVersion
-  /** Default: this SDK's version. */
-  sdkVersion?: string
   /** The plugin's public ping endpoint; null for hosted apps without one. */
   callbackUrl?: string | null
   /** Default: `SUPERTEXT_REPORT_URL` from the environment, else the live center. */
   reportUrl?: string
-  /** For the key check (base URL, fetch, sleep for tests). */
-  clientOptions?: SupertextClientOptions
   /** HTTP for the report (tests). Default: the global `fetch`. */
   fetch?: FetchLike
   /** Clock in milliseconds (tests). */
@@ -62,7 +91,7 @@ export interface ReporterResult {
   /** Store this. */
   state: ReporterState
   /** The latest key check (show it on the settings or status page). */
-  check: ApiKeyCheck | null
+  check: KeyCheck | null
   /** The event that was reported (or tried); null when nothing was due. */
   event: ReportEvent | null
   /** Whether the center accepted the report. */
@@ -71,7 +100,20 @@ export interface ReporterResult {
 
 export const EMPTY_REPORTER_STATE: ReporterState = Object.freeze({ reportedVersions: null, reportedKeyStatus: null, lastFailureAt: null, keyCheck: null })
 
-/** A stored state (parsed JSON, or anything) as a `ReporterState`; unknown or broken values become empty. */
+/** A key check from any object with the KeyCheck fields (e.g. the SDK's ApiKeyCheck); null if it has none. */
+export function keyCheck(value: unknown): KeyCheck | null {
+  const k = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  if (!k || typeof k.status !== 'string' || typeof k.checkedAt !== 'string') return null
+  return {
+    status: k.status,
+    checkedAt: k.checkedAt,
+    httpStatus: typeof k.httpStatus === 'number' ? k.httpStatus : null,
+    errorCode: typeof k.errorCode === 'string' ? k.errorCode : null,
+    fingerprint: typeof k.fingerprint === 'string' ? k.fingerprint : '',
+  }
+}
+
+/** A stored state (parsed JSON, a JSON string, or anything) as a `ReporterState`; unknown or broken values become empty. */
 export function reporterState(value: unknown): ReporterState {
   if (typeof value === 'string') {
     try {
@@ -82,18 +124,7 @@ export function reporterState(value: unknown): ReporterState {
   }
   const o = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
   const s = (v: unknown) => (typeof v === 'string' ? v : null)
-  const k = o.keyCheck && typeof o.keyCheck === 'object' ? (o.keyCheck as Record<string, unknown>) : null
-  const keyCheck: ApiKeyCheck | null =
-    k && typeof k.status === 'string' && typeof k.checkedAt === 'string'
-      ? {
-          status: k.status as ApiKeyCheck['status'],
-          checkedAt: k.checkedAt,
-          httpStatus: typeof k.httpStatus === 'number' ? k.httpStatus : null,
-          errorCode: s(k.errorCode),
-          fingerprint: s(k.fingerprint) ?? '',
-        }
-      : null
-  return { reportedVersions: s(o.reportedVersions), reportedKeyStatus: s(o.reportedKeyStatus), lastFailureAt: s(o.lastFailureAt), keyCheck }
+  return { reportedVersions: s(o.reportedVersions), reportedKeyStatus: s(o.reportedKeyStatus), lastFailureAt: s(o.lastFailureAt), keyCheck: keyCheck(o.keyCheck) }
 }
 
 /**
@@ -158,14 +189,16 @@ export class InstallationReporter {
   /** On back-end requests that run the plugin's code: checks a changed key, reports what changed. */
   async onRequest(state: ReporterState | null, apiKey: string): Promise<ReporterResult> {
     let current = state ?? EMPTY_REPORTER_STATE
-    if (current.keyCheck === null || current.keyCheck.fingerprint !== apiKeyFingerprint(apiKey)) current = { ...current, keyCheck: await this.#check(apiKey) }
+    if (current.keyCheck === null || current.keyCheck.fingerprint !== this.#options.keyChecker.fingerprint(apiKey)) {
+      current = { ...current, keyCheck: await this.#check(apiKey) }
+    }
     return this.#reportIfDue(current, this.#dueEvent(current))
   }
 
-  /** A translation was rejected with 401/403: the key is invalid (no request to Supertext). */
+  /** A translation was rejected with 401/403: the key is invalid (no check against Supertext). */
   async authenticationFailed(state: ReporterState | null, apiKey: string, httpStatus = 401): Promise<ReporterResult> {
-    const keyCheck: ApiKeyCheck = { status: 'invalid', checkedAt: isoSeconds(this.#now()), httpStatus, errorCode: null, fingerprint: apiKeyFingerprint(apiKey) }
-    const current = { ...(state ?? EMPTY_REPORTER_STATE), keyCheck }
+    const check: KeyCheck = { status: 'invalid', checkedAt: isoSeconds(this.#now()), httpStatus, errorCode: null, fingerprint: this.#options.keyChecker.fingerprint(apiKey) }
+    const current = { ...(state ?? EMPTY_REPORTER_STATE), keyCheck: check }
     return this.#reportIfDue(current, this.#dueEvent(current))
   }
 
@@ -183,16 +216,15 @@ export class InstallationReporter {
   /** The report body for an event and state. */
   buildReport(event: ReportEvent, state: ReporterState): Record<string, unknown> {
     const o = this.#options
-    const runtime = this.#runtime()
     const body: Record<string, unknown> = {
       schema: 1,
       event,
       site_url: o.siteUrl,
       plugin: { name: o.plugin.name, version: o.plugin.version },
       system: nameVersion(o.system),
-      runtime: nameVersion(runtime),
-      sdk_version: o.sdkVersion ?? SDK_VERSION,
+      runtime: nameVersion(this.#runtime()),
     }
+    if (o.sdkVersion) body.sdk_version = o.sdkVersion
     const check = state.keyCheck
     if (check) {
       body.api_key_configured = check.fingerprint !== ''
@@ -216,8 +248,14 @@ export class InstallationReporter {
     return null
   }
 
-  async #check(apiKey: string): Promise<ApiKeyCheck> {
-    return new SupertextClient(apiKey, { ...this.#options.clientOptions, now: this.#now }).checkApiKey()
+  async #check(apiKey: string): Promise<KeyCheck> {
+    try {
+      const check = keyCheck(await this.#options.keyChecker.check(apiKey))
+      if (check) return check
+    } catch {
+      // the SDK's check never throws; a plugin's own checker might
+    }
+    return { status: 'error', checkedAt: isoSeconds(this.#now()), httpStatus: null, errorCode: null, fingerprint: this.#options.keyChecker.fingerprint(apiKey) }
   }
 
   async #reportIfDue(state: ReporterState, event: ReportEvent | null): Promise<ReporterResult> {
@@ -236,7 +274,11 @@ export class InstallationReporter {
     try {
       const response = await this.#fetch(this.reportUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': `supertext-sdk-typescript ${this.#options.plugin.name}/${this.#options.plugin.version}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'User-Agent': `supertext-plugin-health/${PLUGIN_HEALTH_VERSION} (typescript) ${this.#options.plugin.name}/${this.#options.plugin.version}`,
+        },
         body: JSON.stringify(this.buildReport(event, state)),
         signal: AbortSignal.timeout(REPORT_TIMEOUT_MS),
       })
@@ -250,6 +292,11 @@ export class InstallationReporter {
       : { ...state, lastFailureAt: isoSeconds(this.#now()) }
     return { state: next, check: next.keyCheck, event, sent: ok }
   }
+}
+
+/** `2026-10-13T08:00:00Z` for a time in milliseconds. */
+export function isoSeconds(ms: number): string {
+  return new Date(Math.floor(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z')
 }
 
 function nameVersion(value: NameVersion): Record<string, string> {

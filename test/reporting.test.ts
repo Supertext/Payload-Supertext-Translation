@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { languageStatus } from '../src/endpoints.js'
-import { PLUGIN_NAME, Reporting, siteUrl, StateStore, versionReportsEnabled } from '../src/reporting.js'
+import { PLUGIN_NAME, Reporting, SDK_VERSION, siteUrl, StateStore, versionReportsEnabled } from '../src/reporting.js'
+import { apiKeyFingerprint } from '../src/vendor/supertext-sdk/v1/index.js'
 import { pluginVersion, releaseUrl } from '../src/versions.js'
 import { fakeSupertext } from './fakeSupertext.js'
 
@@ -87,9 +88,25 @@ describe('reporting glue', () => {
     version = '3.91.0'
     expect((await make().run('onRequest', req(payload), 'test-key'))?.event).toBe('upgraded')
     expect(fake.reports.map((r) => r.event)).toEqual(['installed', 'upgraded'])
-    expect(fake.reports[0]).toMatchObject({ callback: { url: 'http://cms.example.ch/api/supertext/ping' }, site_url: 'http://cms.example.ch' })
+    expect(fake.reports[0]).toMatchObject({ callback: { url: 'http://cms.example.ch/api/supertext/ping' }, sdk_version: SDK_VERSION, site_url: 'http://cms.example.ch' })
     expect(JSON.stringify(fake.reports)).not.toContain('test-key')
     expect(JSON.stringify([...kv.map.values()])).not.toContain('test-key')
+  })
+
+  it('keeps the state the SDK 0.2 reporter stored: no new installed report', async () => {
+    const fake = fakeSupertext()
+    const kv = memoryKv()
+    const reporting = new Reporting({
+      apiBaseUrl: 'https://api.test/v1/',
+      reporterOverrides: { clientOptions: { fetch: fake.fetch }, fetch: fake.fetch, reportUrl: 'https://center.test/api/v1/report' },
+    })
+    const versions = reporting.reporter(fakePayload(kv), 'http://cms.example.ch').versions
+    const keyCheck = { checkedAt: '2026-10-01T08:00:00Z', errorCode: null, fingerprint: apiKeyFingerprint('test-key'), httpStatus: 200, status: 'ok' }
+    const old = { keyCheck, lastFailureAt: null, reportedKeyStatus: 'ok', reportedVersions: versions }
+    kv.map.set('supertext-reporter', old)
+    expect(await reporting.run('onRequest', req(fakePayload(kv)), 'test-key')).toMatchObject({ event: null, sent: false })
+    expect(fake.reports).toHaveLength(0)
+    expect(kv.map.get('supertext-reporter')).toEqual(old)
   })
 
   it('backs off after a failed report and never throws', async () => {
