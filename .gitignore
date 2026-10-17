@@ -7,6 +7,8 @@ coverage/
 *.log
 .DS_Store
 test/docs/node_modules/
+test/e2e/node_modules/
+test/e2e/artifacts/
 # Written by `next dev` (Next.js agent hints), not part of the demo
 demo/AGENTS.md
 demo/CLAUDE.md
