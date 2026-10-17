@@ -181,13 +181,15 @@ let i = 0
 for (const item of items) await translateInAdmin('first-run', item, i++)
 
 // --- Check the result -----------------------------------------------------------------------
+// Ratio of changed fields and the language are judged per locale over all documents: a small
+// document (the Header: "Home", a slogan) can't tell the language on its own.
 const first = new Map()
+const perLocale = Object.fromEntries(targets.map((l) => [l, { fields: 0, changed: 0, text: '' }]))
 for (const item of items) {
   const src = source.get(item)
   const srcFields = fieldsOf(src)
   for (const locale of targets) {
     const tag = `${item.label} (${locale})`
-    const lang = locale.split(/[-_]/)[0].toLowerCase()
     const doc = await item.get(locale, true)
     first.set(`${item.label}|${locale}`, doc)
     const fields = fieldsOf(doc)
@@ -214,14 +216,11 @@ for (const item of items) {
       if (a.italic) check(`${tag}: ${path} keeps its italics`, a.italic === b.italic, `${b.italic}/${a.italic}`)
       if (a.links.length) check(`${tag}: ${path} keeps its links`, a.links.join(' ') === b.links.join(' '), `${b.links.join(' ')} / ${a.links.join(' ')}`)
     }
-    check(`${tag}: texts were changed by the translation`, srcFields.size > 0 && changed / srcFields.size >= 0.8, `${changed}/${srcFields.size} fields`)
+    perLocale[locale].fields += srcFields.size
+    perLocale[locale].changed += changed
+    perLocale[locale].text += text
     for (const key of ['slug', 'internalNote']) {
       if (src[key] !== undefined) check(`${tag}: non-localized ${key} unchanged`, doc[key] === src[key], `${doc[key]}`)
-    }
-    if (STOPWORDS[lang]) {
-      const scores = Object.fromEntries(Object.keys(STOPWORDS).map((l) => [l, score(text, l)]))
-      const best = Object.entries(scores).sort((x, y) => y[1] - x[1])[0][0]
-      check(`${tag}: text is in the target language`, best === lang, JSON.stringify(scores))
     }
     if (/^de-ch$/i.test(locale)) check(`${tag}: Swiss German spelling (no "ß")`, !text.includes('ß'))
     if (item.drafts) {
@@ -229,6 +228,16 @@ for (const item of items) {
       const published = await item.get(locale, false)
       check(`${tag}: translation is a draft, not published`, fieldsOf(published).size === 0, [...fieldsOf(published).keys()].join(', '))
     }
+  }
+}
+
+for (const [locale, { fields, changed, text }] of Object.entries(perLocale)) {
+  const lang = locale.split(/[-_]/)[0].toLowerCase()
+  check(`${locale}: texts were changed by the translation`, fields > 0 && changed / fields >= 0.8, `${changed}/${fields} fields`)
+  if (STOPWORDS[lang]) {
+    const scores = Object.fromEntries(Object.keys(STOPWORDS).map((l) => [l, score(text, l)]))
+    const best = Object.entries(scores).sort((x, y) => y[1] - x[1])[0][0]
+    check(`${locale}: text is in the target language`, best === lang, JSON.stringify(scores))
   }
 }
 
