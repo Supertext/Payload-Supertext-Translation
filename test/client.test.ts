@@ -104,19 +104,27 @@ describe('language codes', () => {
     expect(targetCode('es')).toBe('es')
     expect(targetCode('NL')).toBe('nl')
   })
-  it('guesses no region: unmapped locales are an unsupported_language error', () => {
-    for (const locale of ['de', 'en', 'fr', 'zh', 'es-ES', 'sl-SI', 'xx']) {
+  it('uses the SDK default where one is obvious', () => {
+    expect(targetCode('de')).toBe('de-DE')
+    expect(targetCode('en')).toBe('en-US')
+    expect(targetCode('fr')).toBe('fr-FR')
+    expect(targetCode('zh')).toBe('zh-Hans')
+    expect(targetCode('zh-TW')).toBe('zh-Hant')
+    expect(targetCode('es-ES')).toBe('es')
+  })
+  it('guesses nothing else: locales without mapping and default are an unsupported_language error', () => {
+    for (const locale of ['en-IE', 'de-LI', 'gsw', 'sr-RS', 'xx']) {
       expect(() => targetCode(locale), locale).toThrow(SupertextError)
       expect(targetCodeOrNull(locale), locale).toBeNull()
     }
     const err = (() => {
       try {
-        targetCode('de')
+        targetCode('de-LI')
       } catch (e) {
         return e
       }
     })()
-    expect(err).toMatchObject({ code: 'unsupported_language', targetLang: 'de' })
+    expect(err).toMatchObject({ code: 'unsupported_language', targetLang: 'de-LI' })
   })
   it('lets the mapping win', () => {
     expect(targetCode('de', { de: 'de-CH' })).toBe('de-CH')

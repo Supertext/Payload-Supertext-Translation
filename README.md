@@ -12,7 +12,7 @@ Translates localized `text`, `textarea` and Lexical `richText` fields, including
 
 **Live demo:** <https://payload-production-cfd2.up.railway.app> (admin at `/admin`, credentials from the Supertext team)
 
-**Requirements:** a Supertext account ([create one or log in](https://www.supertext.com/person/en/account/signin)) and an API key from supertext.com → [Integrations → API](https://www.supertext.com/en/integrations/api) (requires the Admin role), set as `SUPERTEXT_API_KEY`. Map every Payload locale that isn't itself a Supertext code (`de-CH`, `es`, …) with `languageMap`, e.g. `{ en: 'en-US', de: 'de-CH' }`.
+**Requirements:** a Supertext account ([create one or log in](https://www.supertext.com/person/en/account/signin)) and an API key from supertext.com → [Integrations → API](https://www.supertext.com/en/integrations/api) (requires the Admin role), set as `SUPERTEXT_API_KEY`. Each Payload locale's Supertext language is chosen in the admin under **Supertext → Supertext settings** (one combo box per locale, preselected: `de` → `de-DE`, `en` → `en-US`, `de-CH` stays `de-CH`); the `languageMap` option can override it for automated setups.
 
 The plugin checks the API key automatically and, unless you turn it off (`versionReports: false` or `SUPERTEXT_VERSION_REPORTS=0`), sends version information to Supertext: the site URL and the plugin, Payload, Node.js and SDK versions — no content, no API key, no personal data. See the [Installation guide](docs/INSTALLATION.md#version-information-the-api-key-check-and-the-ping-endpoint).
 

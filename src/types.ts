@@ -25,18 +25,27 @@ export type SupertextTranslationOptions = {
   apiUrl?: string
 
   /**
-   * Payload locale code → Supertext language code. A locale that is already a Supertext code
-   * (apart from case and `_`/`-`: `en`, `de-CH`, `fr_ch`, `es`, `nl`) needs no entry; any other
-   * locale must be mapped (`{ de: 'de-CH', fr: 'fr-FR', zh: 'zh-Hans' }`), or translating into it
-   * fails with "has no Supertext language yet" and nothing is sent. There are no default regions.
-   * Supported codes: `SUPERTEXT_TARGETS` and docs/INSTALLATION.md.
+   * Optional override of the *Supertext settings* screen (one combo box per locale), for
+   * automated setups: Payload locale code → Supertext language code, e.g.
+   * `{ de: 'de-CH', zh: 'zh-Hans' }`. An entry here wins over the screen (which then shows it
+   * read-only). Without either, a locale that is a Supertext code (`de-CH`, `fr_ch`, `es`) is used
+   * as it is, else the SDK's default (`de` → `de-DE`, `en` → `en-US`, `zh` → `zh-Hans`); a locale
+   * with neither (`en-IE`, `de-LI`, `gsw`) fails with "has no Supertext language yet" and
+   * nothing is sent. Supported codes: `SUPERTEXT_TARGETS` and docs/INSTALLATION.md.
    */
   languageMap?: Record<string, string>
   /**
+   * Optional override of the formal/informal setting on the Supertext settings screen:
    * Payload locale code → politeness (`more` = formal, `less` = informal). Only for targets that
    * offer it (see docs/INSTALLATION.md); for others the translation fails with a clear message.
    */
   politeness?: Record<string, Politeness>
+  /**
+   * Who may open and change the *Supertext settings* (language mapping). Default: the `access`
+   * option, else any logged-in user. Restrict it to administrators where your users have roles,
+   * e.g. `({ req }) => req.user?.role === 'admin'`.
+   */
+  settingsAccess?: (args: { req: PayloadRequest }) => boolean | Promise<boolean>
 
   /**
    * "Send version information to Supertext": the site URL and the versions of this plugin,
@@ -72,8 +81,8 @@ export type SupertextTranslationOptions = {
   dashboardPanel?: boolean
 
   /**
-   * Keep the endpoint and admin panel out of the config (e.g. per environment)
-   * without changing the database schema. The plugin adds no fields either way.
+   * Keep the endpoints and admin controls out of the config (e.g. per environment) without
+   * changing the database schema: the Supertext settings global stays, hidden from the admin.
    */
   disabled?: boolean
 }
@@ -96,8 +105,10 @@ export type TranslateResponse = {
 
 export type LanguageStatus = {
   locale: string
-  /** The Supertext code it is sent as; null when it has none (not mapped). */
+  /** The Supertext code it is sent as; null when it has none (no mapping and no default). */
   supertext: string | null
+  /** Where the code comes from: the `languageMap` option, the Supertext settings, or automatic (exact match or SDK default). */
+  origin: 'option' | 'settings' | 'automatic' | null
   politeness: Politeness
   /** False when `politeness` is set but the target offers no formal/informal choice. */
   politenessSupported: boolean
@@ -118,6 +129,8 @@ export type StatusResponse = {
   version: string | null
   releaseUrl: string | null
   sdkVersion: string
+  /** Admin path of the Supertext settings (language mapping). */
+  settingsUrl: string
   reports: { enabled: boolean; pingUrl: string | null }
   keyCheck: KeyCheckStatus | null
 }

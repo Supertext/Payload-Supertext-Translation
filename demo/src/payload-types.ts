@@ -94,9 +94,11 @@ export interface Config {
     | ('en' | 'de-CH' | 'fr-CH' | 'it-CH')[];
   globals: {
     header: Header;
+    'supertext-settings': SupertextSetting;
   };
   globalsSelect: {
     header: HeaderSelect<false> | HeaderSelect<true>;
+    'supertext-settings': SupertextSettingsSelect<false> | SupertextSettingsSelect<true>;
   };
   locale: 'en' | 'de-CH' | 'fr-CH' | 'it-CH';
   widgets: {
@@ -441,6 +443,188 @@ export interface Header {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "supertext-settings".
+ */
+export interface SupertextSetting {
+  id: number;
+  /**
+   * Choose the Supertext language each Payload locale is translated into. The same mapping is used when the locale is the source (Supertext then gets only the language, e.g. de). Supertext’s suggestion is preselected; locales without a suggestion must be mapped.
+   */
+  languages?: {
+    l_en?:
+      | (
+          | 'sq'
+          | 'bg'
+          | 'zh-Hans'
+          | 'zh-Hant'
+          | 'hr'
+          | 'cs'
+          | 'da'
+          | 'nl'
+          | 'en-GB'
+          | 'en-US'
+          | 'fi'
+          | 'fr-FR'
+          | 'fr-CH'
+          | 'de-AT'
+          | 'de-DE'
+          | 'de-CH'
+          | 'el'
+          | 'hu'
+          | 'it-IT'
+          | 'it-CH'
+          | 'ja'
+          | 'ko'
+          | 'nb'
+          | 'pl'
+          | 'pt-BR'
+          | 'pt-PT'
+          | 'rm'
+          | 'ru'
+          | 'sr-Cyrl'
+          | 'sr-Latn'
+          | 'sk'
+          | 'sl'
+          | 'es'
+          | 'sv'
+          | 'gsw-u-sd-chbe'
+          | 'gsw-u-sd-chzh'
+          | 'tr'
+        )
+      | null;
+    l_en_tone?: ('default' | 'more' | 'less') | null;
+    l_de_CH?:
+      | (
+          | 'sq'
+          | 'bg'
+          | 'zh-Hans'
+          | 'zh-Hant'
+          | 'hr'
+          | 'cs'
+          | 'da'
+          | 'nl'
+          | 'en-GB'
+          | 'en-US'
+          | 'fi'
+          | 'fr-FR'
+          | 'fr-CH'
+          | 'de-AT'
+          | 'de-DE'
+          | 'de-CH'
+          | 'el'
+          | 'hu'
+          | 'it-IT'
+          | 'it-CH'
+          | 'ja'
+          | 'ko'
+          | 'nb'
+          | 'pl'
+          | 'pt-BR'
+          | 'pt-PT'
+          | 'rm'
+          | 'ru'
+          | 'sr-Cyrl'
+          | 'sr-Latn'
+          | 'sk'
+          | 'sl'
+          | 'es'
+          | 'sv'
+          | 'gsw-u-sd-chbe'
+          | 'gsw-u-sd-chzh'
+          | 'tr'
+        )
+      | null;
+    l_de_CH_tone?: ('default' | 'more' | 'less') | null;
+    l_fr_CH?:
+      | (
+          | 'sq'
+          | 'bg'
+          | 'zh-Hans'
+          | 'zh-Hant'
+          | 'hr'
+          | 'cs'
+          | 'da'
+          | 'nl'
+          | 'en-GB'
+          | 'en-US'
+          | 'fi'
+          | 'fr-FR'
+          | 'fr-CH'
+          | 'de-AT'
+          | 'de-DE'
+          | 'de-CH'
+          | 'el'
+          | 'hu'
+          | 'it-IT'
+          | 'it-CH'
+          | 'ja'
+          | 'ko'
+          | 'nb'
+          | 'pl'
+          | 'pt-BR'
+          | 'pt-PT'
+          | 'rm'
+          | 'ru'
+          | 'sr-Cyrl'
+          | 'sr-Latn'
+          | 'sk'
+          | 'sl'
+          | 'es'
+          | 'sv'
+          | 'gsw-u-sd-chbe'
+          | 'gsw-u-sd-chzh'
+          | 'tr'
+        )
+      | null;
+    l_fr_CH_tone?: ('default' | 'more' | 'less') | null;
+    l_it_CH?:
+      | (
+          | 'sq'
+          | 'bg'
+          | 'zh-Hans'
+          | 'zh-Hant'
+          | 'hr'
+          | 'cs'
+          | 'da'
+          | 'nl'
+          | 'en-GB'
+          | 'en-US'
+          | 'fi'
+          | 'fr-FR'
+          | 'fr-CH'
+          | 'de-AT'
+          | 'de-DE'
+          | 'de-CH'
+          | 'el'
+          | 'hu'
+          | 'it-IT'
+          | 'it-CH'
+          | 'ja'
+          | 'ko'
+          | 'nb'
+          | 'pl'
+          | 'pt-BR'
+          | 'pt-PT'
+          | 'rm'
+          | 'ru'
+          | 'sr-Cyrl'
+          | 'sr-Latn'
+          | 'sk'
+          | 'sl'
+          | 'es'
+          | 'sv'
+          | 'gsw-u-sd-chbe'
+          | 'gsw-u-sd-chzh'
+          | 'tr'
+        )
+      | null;
+    l_it_CH_tone?: ('default' | 'more' | 'less') | null;
+  };
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "header_select".
  */
 export interface HeaderSelect<T extends boolean = true> {
@@ -451,6 +635,27 @@ export interface HeaderSelect<T extends boolean = true> {
         label?: T;
         href?: T;
         id?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "supertext-settings_select".
+ */
+export interface SupertextSettingsSelect<T extends boolean = true> {
+  languages?:
+    | T
+    | {
+        l_en?: T;
+        l_en_tone?: T;
+        l_de_CH?: T;
+        l_de_CH_tone?: T;
+        l_fr_CH?: T;
+        l_fr_CH_tone?: T;
+        l_it_CH?: T;
+        l_it_CH_tone?: T;
       };
   updatedAt?: T;
   createdAt?: T;

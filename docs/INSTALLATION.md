@@ -53,6 +53,14 @@ npx payload generate:importmap
 
 If you skip this step, the admin panel shows an error about `payload-supertext-translation/client#TranslateButton` or `#SupertextStatus` missing from the import map.
 
+The plugin adds one global, **Supertext settings** (slug `supertext-settings`, one database table, see [Language setup](#language-setup)). With a SQL database (Postgres, SQLite) and migrations in production, create and commit a migration after adding the plugin, and again after adding or removing a Payload locale (each locale is a column):
+
+```bash
+npx payload migrate:create supertext_settings
+```
+
+In development, Payload's schema push creates the table by itself; MongoDB needs nothing.
+
 ## API key
 
 To get a key:
@@ -107,16 +115,36 @@ Each Payload locale needs a Supertext language. Supertext accepts exactly these 
 | Swiss German | `gsw-u-sd-chzh` (Zurich), `gsw-u-sd-chbe` (Bern) |
 | All others, without region | `bg`, `cs`, `da`, `el`, `es`, `fi`, `hr`, `hu`, `ja`, `ko`, `nb`, `nl`, `pl`, `rm`, `ru`, `sk`, `sl`, `sq`, `sv`, `tr` |
 
-- A locale that **is** one of these codes (apart from upper/lower case and `_`/`-`) is used as it is: `de-CH`, `fr_ch`, `es`, `nl`.
-- **Every other locale needs an entry in `languageMap`**, e.g. `en` → `en-US`, `de` → `de-CH`, `zh` → `zh-Hans`. The plugin never guesses a region: an unmapped locale is shown as *no Supertext language yet* in the Translate menu (it can't be ticked), as *Not mapped* on the Supertext panel, and a translation into it through the API fails with *has no Supertext language yet*; nothing is sent for it.
-- **The source language** is sent without region (`de-CH` → `de`); for a mapped locale, the language of the mapped code is used, so one entry serves both directions (`en` → `en-US` translates into `en-US` and from `en`). A locale that is only a source (often the default locale) needs no entry, but it can't be translated into without one.
-- **Formal/informal** (`politeness`) is offered for every target except English, Swiss German, Romansh, Albanian and Serbian. For those, leave the tone on `default`: a `more`/`less` setting makes the translation fail with *Supertext offers no formal or informal tone for this language* (nothing is sent), and the Supertext panel warns about it.
+Choose them under **Supertext → Supertext settings** in the admin sidebar: one combo box per Payload locale (the source locale included), listing Supertext's languages as *Name (code)*, plus a **Tone** select (formal/informal) where the chosen language offers one. Save, and the next translation uses the new mapping; no restart.
+
+<img src="images/settings-languages.png" alt="Supertext settings, Language mapping: English (en) → American English (en-US); Deutsch (Schweiz) (de-CH) → Swiss High German (de-CH), Tone Formal; Français (Suisse) (fr-CH) → Swiss French (fr-CH), Tone Default; Italiano (Svizzera) (it-CH) → Italian (Switzerland) (it-CH), Tone Default" width="700">
+
+<img src="images/settings-languages-open.png" alt="The combo box for Deutsch (Schweiz) opened: Albanian (sq), Bulgarian (bg), Simplified Chinese (zh-Hans), Traditional Chinese (zh-Hant), Croatian (hr), Czech (cs), Danish (da), Dutch (nl), British English (en-GB) …" width="700">
+
+Each combo box is preselected with Supertext's suggestion (the SDK's `suggestTarget`), and a locale nobody has mapped uses that suggestion when translating:
+
+| Payload locale | Suggested / used without a mapping |
+| --- | --- |
+| Already a Supertext code (apart from case and `_`/`-`): `de-CH`, `fr_ch`, `es`, `nl` | that code |
+| `de`, `en`, `fr`, `it`, `pt` | `de-DE`, `en-US`, `fr-FR`, `it-IT`, `pt-PT` |
+| `zh`, `zh-CN`, `zh-SG` / `zh-TW`, `zh-HK`, `zh-MO` | `zh-Hans` / `zh-Hant` |
+| `sr` | `sr-Latn` |
+| A region of a language Supertext offers without region: `es-ES`, `nl-BE`, `sl-SI` | `es`, `nl`, `sl` |
+| Anything else: `en-IE`, `de-LI`, `gsw`, `sr-RS`, `xx` | nothing: the combo box is empty (*Select a value*) |
+
+- A locale **without mapping and without suggestion** is shown as *no Supertext language yet* in the Translate menu (it can't be ticked) and on the Supertext panel; a translation into it through the API fails with *has no Supertext language yet*, and nothing is sent. Choose a language for it in the settings.
+- **The source language** is sent without region (`de-CH` → `de`); for a mapped locale, the language of the chosen code is used, so one mapping serves both directions (`en` → `en-US` translates into `en-US` and from `en`).
+- **Formal/informal** (Tone) is offered for every target except English, Swiss German, Romansh, Albanian and Serbian; for those the Tone select is hidden and a tone saved earlier is ignored.
+- Only Supertext's codes can be saved; Payload refuses anything else.
+- Who may open and change the settings: the `settingsAccess` option, else the `access` option, else any logged-in user. Restrict it to administrators where your users have roles: `settingsAccess: ({ req }) => req.user?.role === 'admin'`.
+
+**Override for automated setups:** the `languageMap` and `politeness` options still work and win over the screen per locale. Such a combo box is read-only and says *Set by the languageMap option in payload.config*; the Supertext panel shows *set by the languageMap option*. Configurations from before the settings screen keep working unchanged.
 
 ```ts
 supertextTranslation({
   collections: ['pages'],
-  languageMap: { en: 'en-US', de: 'de-CH', ch: 'de-CH', romand: 'fr-CH', zh: 'zh-Hans' },
-  politeness: { de: 'more' }, // formal "Sie"; use 'less' for informal
+  languageMap: { ch: 'de-CH', romand: 'fr-CH' }, // optional: wins over Supertext settings
+  politeness: { ch: 'more' }, // optional: formal "Sie"; 'less' for informal
 })
 ```
 
@@ -149,8 +177,9 @@ Each user then picks the language under *Account* → *Language* (Payload also f
 | `apiKey` | `process.env.SUPERTEXT_API_KEY` | Supertext API key, with or without the `Supertext-Auth-Key ` prefix. |
 | `environment` | `'live'` | `live`, `staging` or `testing` Supertext API. |
 | `apiUrl` | — | Explicit API base URL (e.g. a proxy). Overrides `environment`. |
-| `languageMap` | `{}` | Payload locale → Supertext language code, e.g. `{ en: 'en-US', de: 'de-CH', zh: 'zh-Hans' }`. Needed for every locale that isn't itself a Supertext code (see [Language setup](#language-setup)); there are no default regions. |
-| `politeness` | `{}` | Payload locale → `default`, `more` (formal) or `less` (informal). Only for targets that offer it (not English, Swiss German, Romansh, Albanian, Serbian). |
+| `languageMap` | `{}` | Optional override of **Supertext settings** for automated setups: Payload locale → Supertext language code, e.g. `{ de: 'de-CH', zh: 'zh-Hans' }`. An entry wins over the combo box, which then becomes read-only (see [Language setup](#language-setup)). |
+| `politeness` | `{}` | Optional override of the Tone select: Payload locale → `default`, `more` (formal) or `less` (informal). Only for targets that offer it (not English, Swiss German, Romansh, Albanian, Serbian). |
+| `settingsAccess` | `access`, else logged-in user | `({ req }) => boolean` — who may open and change **Supertext settings** (the language mapping), e.g. only administrators. |
 | `versionReports` | `true` | *Send version information to Supertext* (see [Version information](#version-information-the-api-key-check-and-the-ping-endpoint)). The environment variable `SUPERTEXT_VERSION_REPORTS` wins: `0` (or `false`, `off`, `no`) turns it off, `1` on. |
 | `dashboardPanel` | `true` | Show the Supertext panel on the admin dashboard (for users who may translate). |
 | `skipFieldNames` | `['slug']` | Field names never translated, at any depth. |
@@ -158,13 +187,13 @@ Each user then picks the language under *Account* → *Language* (Payload also f
 | `pollIntervalMs` | `2000` | How often the server asks Supertext whether a translation is ready. |
 | `timeoutMs` | `180000` | Maximum wait per document and locale (3 minutes). |
 | `access` | logged-in user | `({ req }) => boolean` — who may start translations. The collection's/global's own read and update access is always enforced as well. |
-| `disabled` | `false` | Leave the endpoints and panel out of the config (the plugin adds no fields, so the schema is unaffected). |
+| `disabled` | `false` | Leave the endpoints and panel out of the config. The *Supertext settings* global stays (hidden), so the schema is unaffected. |
 
 ## The Supertext panel
 
-The plugin's settings are code (the options above and environment variables), so it has no settings form. Instead, the admin **dashboard** shows a **Supertext translation** panel to users who may translate: the installed plugin version (linked to its release notes on GitHub) and the bundled Supertext SDK version, the latest API key check with its time and a **Check again** button (a cost-free call to the Supertext API), every Payload locale with the Supertext code and tone it is sent with (*Not mapped* for locales that still need a `languageMap` entry), and whether version information is sent to Supertext, with the ping URL.
+Apart from the language mapping (**Supertext → Supertext settings**), the plugin's settings are code (the options above and environment variables). The admin **dashboard** shows a **Supertext translation** panel to users who may translate: the installed plugin version (linked to its release notes on GitHub) and the bundled Supertext SDK version, the latest API key check with its time and a **Check again** button (a cost-free call to the Supertext API), every Payload locale with the Supertext code and tone it is sent with and where the code comes from (*automatic*: the suggestion; *chosen in the Supertext settings*; *set by the languageMap option*; *No Supertext language* for locales without mapping and suggestion), a **Change the language mapping** link to the settings, and whether version information is sent to Supertext, with the ping URL.
 
-![The Supertext panel on the dashboard: plugin version 0.1.0, SDK 0.2.0, "API key checked: the connection to Supertext works." with its time, Check again, the languages en → en-US, de-CH → de-CH (more), fr-CH → fr-CH, it-CH → it-CH, and Send version information to Supertext: On, with the ping URL](images/status-panel.png)
+![The Supertext panel on the dashboard: plugin version 0.1.0, SDK 0.4.0, "API key checked: the connection to Supertext works." with its time, Check again, the languages en → en-US, de-CH → de-CH (more), fr-CH → fr-CH, it-CH → it-CH, each "automatic", the link "Change the language mapping", and Send version information to Supertext: On, with the ping URL](images/status-panel.png)
 
 Turn the panel off with `dashboardPanel: false`.
 
@@ -203,9 +232,10 @@ A translation request stays open until Supertext finishes (usually seconds, at m
 ```bash
 npm install github:Supertext/Payload-Supertext-Translation
 npx payload generate:importmap
+npx payload migrate:create supertext_update   # SQL databases with migrations, if the schema changed
 ```
 
-Check [CHANGELOG.md](../CHANGELOG.md) for changes.
+Check [CHANGELOG.md](../CHANGELOG.md) for changes. An update that adds Supertext languages changes the *Supertext settings* columns (Postgres enums) and needs a migration; Payload's `migrate:create` reports "No schema changes" otherwise.
 
 ## Uninstall
 
@@ -213,7 +243,7 @@ Check [CHANGELOG.md](../CHANGELOG.md) for changes.
 2. `npm uninstall payload-supertext-translation`
 3. `npx payload generate:importmap`
 
-The plugin adds no collections or fields, so no migration is needed. Translations already saved stay in your documents. The reporter's state stays as one entry (`supertext-reporter`) in Payload's key-value store; delete it there if you like.
+The plugin's only table is the *Supertext settings* global (`supertext_settings`); with a SQL database, create a migration after removing the plugin (`npx payload migrate:create remove_supertext`) to drop it. The plugin adds no fields to your collections. Translations already saved stay in your documents. The reporter's state stays as one entry (`supertext-reporter`) in Payload's key-value store; delete it there if you like.
 
 ## Troubleshooting
 
@@ -225,9 +255,11 @@ The plugin adds no collections or fields, so no migration is needed. Translation
 | "No Supertext API key is configured" | Set `SUPERTEXT_API_KEY` on the server and restart. No key yet? See [API key](#api-key) (account signup and key generation, Admin role required). |
 | "Authentication failure" | The key is wrong or for another environment (`live` vs `staging`). Generate a new one at <https://www.supertext.com/en/integrations/api> (Admin role required). |
 | "Your Supertext translation limit is exceeded" | The Supertext subscription quota is used up. |
-| "Supertext does not support this language pair" | The code sent (from `languageMap`) isn't one Supertext offers; use a code from [Language setup](#language-setup). The detail shows the codes that were sent. |
-| "The language … has no Supertext language yet", or *no Supertext language yet* in the Translate menu | The locale is no Supertext code and has no `languageMap` entry (e.g. `de`, `fr`, `en`, `zh-CN`). Map it, e.g. `languageMap: { de: 'de-CH' }`, and restart. The Supertext panel shows which locales are *Not mapped*. |
-| "Supertext offers no formal or informal tone for this language" | `politeness` is set to `more`/`less` for a target without formal/informal (English, Swiss German, Romansh, Albanian, Serbian). Remove it or set `default`. |
+| "Supertext does not support this language pair" | The code sent (from a `languageMap` entry) isn't one Supertext offers; use a code from [Language setup](#language-setup) or remove the entry and choose in **Supertext settings**. The detail shows the codes that were sent. |
+| "The language … has no Supertext language yet", or *no Supertext language yet* in the Translate menu | The locale has no mapping and Supertext has no suggestion for it (e.g. `en-IE`, `de-LI`, `gsw`). Choose a language for it under **Supertext → Supertext settings**. |
+| "Supertext offers no formal or informal tone for this language" | The `politeness` option is set to `more`/`less` for a target without formal/informal (English, Swiss German, Romansh, Albanian, Serbian). Remove it or set `default`. |
+| *Supertext settings* missing from the sidebar | The user fails `settingsAccess` (or `access`). |
+| Error about the `supertext_settings` table or an `enum_st_…` type on start | The migration for the settings global (or for a new locale) is missing: `npx payload migrate:create supertext_settings`, commit, deploy. |
 | "Supertext rejected the API key" on the Supertext panel | Check that the whole key was copied into `SUPERTEXT_API_KEY` (and the `environment` matches the key), restart, then **Check again**. New key: <https://www.supertext.com/en/integrations/api> (Admin role required). |
 | "The API key couldn't be checked …" | Supertext couldn't be reached or answered with an error; translations may still work. Check the server's outgoing HTTPS access, then **Check again** later. |
 | The ping endpoint answers 404 | Version information is off (`versionReports: false` or `SUPERTEXT_VERSION_REPORTS=0`). |

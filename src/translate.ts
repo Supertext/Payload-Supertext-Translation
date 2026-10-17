@@ -4,6 +4,7 @@ import { collectSegments } from './collect.js'
 import { errorMessage } from './i18n.js'
 import { politenessForTarget, sourceCode, targetCode } from './languages.js'
 import { applyTranslations, buildHtml, parseHtml } from './segments.js'
+import { effectiveSettings, loadSettings } from './settings.js'
 import { SupertextClient, SupertextError } from './supertext/client.js'
 import type { LocaleResult, SupertextTranslationOptions } from './types.js'
 
@@ -69,6 +70,9 @@ export async function translateDocument(args: TranslateDocumentArgs): Promise<Lo
     return run
   }
 
+  // The mapping: the plugin options win, then the Supertext settings (combo boxes).
+  const settings = effectiveSettings(await loadSettings(payload), options)
+
   const blocksBySlug = Object.fromEntries((payload.config.blocks ?? []).map((b) => [b.slug, b]))
   const fields = entity.fields as Field[]
 
@@ -82,12 +86,12 @@ export async function translateDocument(args: TranslateDocumentArgs): Promise<Lo
         })
         if (segments.length === 0) return { locale, missing: [], ok: true, segments: 0 }
 
-        // Unmapped locales and a tone the target lacks fail here, before anything is sent.
-        const targetLang = targetCode(locale, options.languageMap)
+        // Locales without mapping and default, and a tone the target lacks, fail here, before anything is sent.
+        const targetLang = targetCode(locale, settings.languageMap)
         const html = await client.translateHtml({
           html: buildHtml(segments),
-          politeness: politenessForTarget(locale, targetLang, options.politeness),
-          sourceLang: sourceCode(sourceLocale, options.languageMap),
+          politeness: politenessForTarget(locale, targetLang, settings.politeness),
+          sourceLang: sourceCode(sourceLocale, settings.languageMap),
           targetLang,
         })
         const missing = applyTranslations(segments, parseHtml(html))

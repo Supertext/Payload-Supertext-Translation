@@ -23,7 +23,7 @@ The Translate control and its messages follow your Payload admin language (Engli
 
 You get a green message per success, and a red one for any language that failed — the other languages are still saved.
 
-A language marked *no Supertext language yet* in the list can't be ticked: your administrator still has to tell the plugin which Supertext language it is (see the [Installation guide](INSTALLATION.md#language-setup)).
+A language marked *no Supertext language yet* in the list can't be ticked: your administrator still has to choose its Supertext language under **Supertext → Supertext settings** (see the [Installation guide](INSTALLATION.md#language-setup)).
 
 Users who may translate also see a **Supertext translation** panel on the admin dashboard. It is for administrators (whether the Supertext key works, which language each locale is sent as); you don't need it to translate.
 
@@ -74,7 +74,7 @@ Translating again overwrites the earlier translation of the translated fields in
 | *Some passages came back empty and kept the source text* | Supertext returned nothing for a few passages; check them in the translated language. |
 | *Authentication failure…* | The Supertext key is invalid. Ask your administrator. |
 | *Supertext does not support this language pair…* | One of the languages isn't one Supertext translates. Ask your administrator to check the language mapping. |
-| *The language … has no Supertext language yet…* | The plugin doesn't know which Supertext language this locale is, so nothing was sent. Ask your administrator to map it. |
+| *The language … has no Supertext language yet…* | The plugin doesn't know which Supertext language this locale is, so nothing was sent. Ask your administrator to choose one under **Supertext → Supertext settings**. |
 | *Supertext offers no formal or informal tone for this language…* | A formal or informal tone is set for a language that has none (e.g. English). Ask your administrator to set it to the default tone. |
 | *Your Supertext translation limit is exceeded…* | The company's Supertext quota is used up. |
 | *Timed out waiting…* | The document is very long or Supertext is slow. Try again, or ask your administrator to raise the timeout. |

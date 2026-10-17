@@ -4,7 +4,15 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added
+
+- **Supertext settings** (admin sidebar → *Supertext* → *Supertext settings*): one combo box per Payload locale (source locale included) with Supertext's languages as *Name (code)*, preselected with Supertext's suggestion, plus a formal/informal select where the chosen language offers one. Stored in a new global `supertext-settings`; only Supertext's codes can be saved. New option `settingsAccess` (default: `access`, else any logged-in user) decides who may change it. **SQL databases: create a migration after updating** (`npx payload migrate:create supertext_settings`), and again whenever you add or remove a locale.
+- The Supertext panel shows where each locale's code comes from (automatic, chosen in the settings, or the `languageMap` option) and links to the settings.
+
 ### Changed
+
+- **Default languages** (bundled Supertext SDK 0.4.0, commit `6aaad33`): a locale nobody mapped now uses Supertext's obvious default instead of failing: `de` → `de-DE`, `en` → `en-US`, `fr` → `fr-FR`, `it` → `it-IT`, `pt` → `pt-PT`, `zh` → `zh-Hans`, `zh-TW` → `zh-Hant`, `sr` → `sr-Latn`, `es-ES` → `es`. Only locales without mapping and default (`en-IE`, `de-LI`, `gsw`, …) are still marked *no Supertext language yet* and fail with *has no Supertext language yet*; that message now points to *Supertext → Supertext settings*.
+- The `languageMap` and `politeness` options are now optional overrides of the settings screen (they win per locale; such a combo box is read-only). Existing configurations keep working unchanged.
 
 - Version reports, the API key check result and the reachability ping now use [Supertext Plugin Health](https://github.com/Supertext/Commando-Center-Supertext-Translation/tree/main/plugin-health) 0.1.0 (bundled in `src/vendor/supertext-plugin-health`); Supertext SDK updated to 0.3.0. No change for sites: settings and stored state stay as they are.
 - **Languages: no more guessed codes** (bundled Supertext SDK 0.2.0, commit `c66cb4d`). Supertext accepts only the codes of its language list: `de-CH`, `en-US`, `pt-BR`, but bare `es`, `nl`, `sl`, and `zh-Hans`, `sr-Latn`. A Payload locale that is such a code (apart from case and `_`/`-`) is used as it is; every other locale needs an entry in `languageMap` (e.g. `{ en: 'en-US', de: 'de-CH', fr: 'fr-FR' }`). The default regions (`de` → `de-DE`, `es` → `es-ES`, `zh` → `zh-CN`, …) are gone: several were rejected by Supertext. **Check your locales after updating:** an unmapped locale is marked *no Supertext language yet* in the Translate menu, *Not mapped* on the new Supertext panel, and a translation into it fails with *The language … has no Supertext language yet* (nothing is sent). For a mapped locale used as the source, the mapped code's language is sent.

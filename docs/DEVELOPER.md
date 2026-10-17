@@ -13,7 +13,8 @@ src/
   collect.ts               walks the field schema + document; returns Segments and the update payload
   segments.ts              Segment type, HTML build/parse, applying translations
   lexical.ts               Lexical inline content <-> inline HTML (one segment per paragraph)
-  languages.ts             Payload locale → Supertext code (the SDK's Languages, no guessing)
+  languages.ts             Payload locale → Supertext code (the SDK's Languages: mapping, exact match, default)
+  settings.ts              the Supertext settings global (one select per locale) and reading it (mapping + options)
   supertext/client.ts      the plugin's Supertext client on top of the Supertext SDK (no Payload dependency)
   vendor/supertext-sdk/    Supertext SDK sources (TypeScript), compiled with the plugin; see *Supertext SDK*
   vendor/supertext-plugin-health/  Supertext Plugin Health sources (TypeScript), compiled with the plugin; see *Supertext Plugin Health*
@@ -111,11 +112,14 @@ Then run typecheck, tests and build, and note the update in `CHANGELOG.md`.
 
 ### Language codes
 
-Supertext accepts exactly the codes of its `GET features` list (the SDK's `Languages.TARGETS` / `Languages.SOURCES`, `spec/languages.json` in the SDK repo): **sources are bare** (`en`, `de`); **targets** are regional only for German, English, French, Italian and Portuguese (`de-CH`, `en-US`, `pt-BR`), `zh-Hans`/`zh-Hant`, `sr-Latn`/`sr-Cyrl`, `gsw-u-sd-chzh`/`gsw-u-sd-chbe`, and **bare for all others** (`es`, `nl`, `sl`). Anything else is rejected (`INVALID_LANGUAGE_PAIR`, HTTP 404) — including the old guessed defaults `es-ES`, `sl-SI`, `zh-CN`.
+Supertext accepts exactly the codes of its `GET features` list (the SDK's `Languages.TARGETS` / `Languages.SOURCES`, `spec/languages.json` in the SDK repo): **sources are bare** (`en`, `de`); **targets** are regional only for German, English, French, Italian and Portuguese (`de-CH`, `en-US`, `pt-BR`), `zh-Hans`/`zh-Hant`, `sr-Latn`/`sr-Cyrl`, `gsw-u-sd-chzh`/`gsw-u-sd-chbe`, and **bare for all others** (`es`, `nl`, `sl`). Anything else is rejected (`INVALID_LANGUAGE_PAIR`, HTTP 404) — e.g. `es-ES`, `sl-SI`, `zh-CN`.
 
-`src/languages.ts`, no guessing:
+**The mapping** (`src/settings.ts`): the global `supertext-settings` has a group `languages` with one row per Payload locale (built from `config.localization.locales` when the plugin runs): a `select` named `l_<locale>` (non-alphanumerics → `_`, made unique; enum `enum_st_l_<locale>`) whose options are the SDK's `Languages.targetOptions()` as *Name (code)* (names from `Intl.DisplayNames` per admin language, the SDK's English name as fallback), `defaultValue` = `Languages.suggestTarget(locale)` (none → Payload's empty *Select a value*), and `l_<locale>_tone` (`default`/`more`/`less`) whose `admin.condition` shows it only where the chosen target supports politeness. Payload validates select values against the options server-side. Access: `settingsAccess`, else `access`, else a logged-in user; `readVersions` is off. `loadSettings(payload)` reads it (`overrideAccess`, codes not in the SDK list ignored, errors logged at debug and treated as empty); `effectiveSettings(saved, options)` puts the `languageMap`/`politeness` options on top per locale and drops a saved tone the effective target lacks. A locale set by an option gets a read-only select with a note. Adding or removing a locale (or an SDK release with new targets) changes the schema: SQL users need a migration. With `disabled`, the global stays (hidden) so the schema doesn't change.
 
-- `targetCode(locale, languageMap)` = `Languages.target()`: the `languageMap` entry wins (sent as given), else a locale equal to a Supertext code apart from case and `_`/`-` (`de_ch` → `de-CH`, `es`), else `SupertextError('unsupported_language')` and nothing is sent. `targetCodeOrNull` is the same without throwing (status panel, Translate menu).
+**Resolution** (`src/languages.ts`), with the effective mapping:
+
+- `targetCode(locale, map)` = `Languages.target()`: the mapping wins (sent as given), else a locale equal to a Supertext code apart from case and `_`/`-` (`de_ch` → `de-CH`, `es`), else the SDK default (`Languages.defaultTarget`: `de` → `de-DE`, `en` → `en-US`, `fr` → `fr-FR`, `it` → `it-IT`, `pt` → `pt-PT`, `zh`/`zh-CN`/`zh-SG` → `zh-Hans`, `zh-TW`/`zh-HK`/`zh-MO` → `zh-Hant`, `sr` → `sr-Latn`, `es-ES` → `es`), else `SupertextError('unsupported_language')` and nothing is sent (`en-IE`, `de-LI`, `gsw`, `sr-RS`). `targetCodeOrNull` is the same without throwing (status panel, Translate menu); `suggestTargetCode` (= `Languages.suggestTarget`) is the select's preselection.
+- `languageStatus()` (status endpoint) reports per locale the code, `origin` (`option`, `settings` — only when the saved value differs from the suggestion —, `automatic`, or `null` without code) and the tone; the response's `settingsUrl` links the panel to the global.
 - `sourceCode(locale, languageMap)`: the SDK's `Languages.source(locale, languageMap)`. One map serves both directions: a mapped value is sent in its source form (`{ de: 'de-CH' }` → `de`, `{ en: 'en-US' }` → `en`), else the locale's language (`de-CH` → `de`).
 - `politenessForTarget(locale, target, politeness)`: `more`/`less` for a target where `Languages.supportsPoliteness()` is false throws `unsupported_feature` before anything is sent, so a setting is never dropped silently; the status panel shows the same as a warning.
 
@@ -164,10 +168,10 @@ Vitest, in `test/`:
 
 - `segments.test.ts` — HTML build/parse, escaping, whitespace, missing segments
 - `collect.test.ts` — schema walking for every supported field type, Lexical grouping, row-id rules, opt-outs
-- `client.test.ts` — the plugin's client on the SDK: API round trip, form fields, status and HTTP error mapping, timeout, 429 retries, key prefix, language codes (exact matches, no default regions, mapping, source from the mapped code, politeness) (the SDK's own tests run in the SDK repository)
+- `client.test.ts` — the plugin's client on the SDK: API round trip, form fields, status and HTTP error mapping, timeout, 429 retries, key prefix, language codes (exact matches, SDK defaults, nothing guessed beyond them, mapping, source from the mapped code, politeness) (the SDK's own tests run in the SDK repository)
 - `reporting.test.ts` — the Commando Center glue: repo name and version, the setting and `SUPERTEXT_VERSION_REPORTS`, site URL, state in `payload.kv` or memory, `installed` → nothing → `upgraded`, back-off and never throwing, ping answers, the language table
 - `translations.test.ts` — all four languages have the English keys, placeholders and URLs; every key the control and endpoints use and every error code of the SDK has a message; config merging; French messages through Payload's own `initI18n`
-- `integration.test.ts` — boots a real Payload 3 instance on in-memory SQLite with Lexical, drafts, arrays, blocks and a global; covers translating into several locales, drafts, globals, failures, unmapped locales, politeness and the endpoints (auth, validation, happy path; status with languages, one `installed` report to a fake center, `api_key_check` after a 401, *Check again*, reports off, the ping)
+- `integration.test.ts` — boots a real Payload 3 instance on in-memory SQLite with Lexical, drafts, arrays, blocks and a global; covers translating into several locales, drafts, globals, failures, a locale without mapping and default, politeness, the Supertext settings global (selects, preselection, saved mapping used, option wins, unknown codes refused, access) and the endpoints (auth, validation, happy path; status with languages, one `installed` report to a fake center, `api_key_check` after a 401, *Check again*, reports off, the ping)
 
 `test/fakeSupertext.ts` is an in-memory Supertext API that "translates" by prefixing `[<target_lang>]`, and a fake Commando Center (`POST …/report` → 202, recorded in `reports`). No test calls the real API or the real center.
 
@@ -180,7 +184,7 @@ Vitest, in `test/`:
 A small Payload 3 + Next.js 16 site that uses the plugin the way a customer would: Pages (drafts, blocks in tabs, rich text, SEO group, a non-localized field) and a Header global, locales `en`, `de-CH`, `fr-CH`, `it-CH`, Postgres. A public frontend at `/<locale>/<slug>` shows the published version of each language.
 
 - `src/seed.ts` runs on every start: creates the demo accounts from `DEMO_ADMIN_EMAIL`/`DEMO_ADMIN_PASSWORD` (fallback: `PAYLOAD_ADMIN_*`) and `DEMO_EDITOR_EMAIL`/`DEMO_EDITOR_PASSWORD` if they don't exist yet — existing accounts are never changed, and the demo has no roles, so both accounts have full access — and English sample content when there are no pages. With an account variable set, Payload's "create first user" screen no longer appears.
-- `languageMap: { en: 'en-US' }`: `de-CH`, `fr-CH` and `it-CH` are Supertext codes already; `en` isn't (English is `en-US` or `en-GB`).
+- No `languageMap`: the mapping is chosen under *Supertext → Supertext settings* (`de-CH`, `fr-CH` and `it-CH` are Supertext codes, `en` is preselected as `en-US`); on the first start the seed sets German (`de-CH`) to formal there. The global's table comes from the migration `20261017_185426_supertext_settings`.
 - Schema changes need a migration: `cd demo && npm run payload migrate:create <name>`, commit `src/migrations/`. Production applies them on start (`prodMigrations`); there is no automatic schema push in production.
 - `i18n.supportedLanguages` offers English, German, French and Italian as admin languages.
 - `localization.defaultLocalePublishOption: 'active'` makes **Publish** release only the language being viewed (see "Publishing" in the user guide).
@@ -217,7 +221,7 @@ Migrations run on start. To reset the demo content, drop the `payload_demo` data
 
 ## Docs screenshots
 
-The images in `docs/images/` are generated by `test/docs/screenshots.mjs` (Playwright) from the local demo on a **fresh database**, against `test/docs/stand-in.mjs`, which answers like the Supertext API and returns real German for the seeded content (`test/docs/sample-de.json`). Regenerate them whenever the Translate control, the edit view or the demo content changes:
+The images in `docs/images/` are generated by `test/docs/screenshots.mjs` (Playwright) from the local demo on a **fresh database**, against `test/docs/stand-in.mjs`, which answers like the Supertext API and returns real German for the seeded content (`test/docs/sample-de.json`). Regenerate them whenever the Translate control, the edit view, the Supertext settings screen (`settings-languages*.png`) or the demo content changes:
 
 ```bash
 cd test/docs && npm install && npx playwright install chromium

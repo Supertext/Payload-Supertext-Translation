@@ -1,8 +1,10 @@
 import type { Endpoint, PayloadRequest } from 'payload'
 
 import { translate } from './i18n.js'
-import { politenessFor, supportsPoliteness, targetCodeOrNull } from './languages.js'
+import { politenessFor, suggestTargetCode, supportsPoliteness, targetCodeOrNull } from './languages.js'
 import { Reporting, SDK_VERSION, siteUrl } from './reporting.js'
+import { effectiveSettings, loadSettings, SETTINGS_SLUG } from './settings.js'
+import type { SavedSettings } from './settings.js'
 import { SupertextClient, SUPERTEXT_ENVIRONMENTS } from './supertext/client.js'
 import { translateDocument } from './translate.js'
 import type {
@@ -50,13 +52,31 @@ async function readBody(req: PayloadRequest): Promise<unknown> {
   }
 }
 
-/** How each locale is sent to Supertext (for the status panel and the dialog). */
-export function languageStatus(locales: string[], options: SupertextTranslationOptions): LanguageStatus[] {
+/**
+ * How each locale is sent to Supertext (for the status panel and the dialog): the plugin options
+ * win, then the saved Supertext settings, then the SDK's exact match or default.
+ */
+export function languageStatus(
+  locales: string[],
+  options: SupertextTranslationOptions,
+  saved: SavedSettings = { languageMap: {}, politeness: {} },
+): LanguageStatus[] {
+  const settings = effectiveSettings(saved, options)
   return locales.map((locale) => {
-    const supertext = targetCodeOrNull(locale, options.languageMap)
-    const politeness = politenessFor(locale, options.politeness)
+    const supertext = targetCodeOrNull(locale, settings.languageMap)
+    const politeness = politenessFor(locale, settings.politeness)
     const supported = supertext === null || politeness === 'default' || supportsPoliteness(supertext) !== false
-    return { locale, politeness, politenessSupported: supported, supertext }
+    // A saved value equal to the suggestion is the preselected default, not a choice of its own.
+    const chosen = saved.languageMap[locale]
+    const origin: LanguageStatus['origin'] =
+      supertext === null
+        ? null
+        : options.languageMap?.[locale]
+          ? 'option'
+          : chosen && chosen !== suggestTargetCode(locale)
+            ? 'settings'
+            : 'automatic'
+    return { locale, origin, politeness, politenessSupported: supported, supertext }
   })
 }
 
@@ -88,11 +108,12 @@ export function createEndpoints(
           apiKeyConfigured: apiKey !== '',
           canTranslate: await canTranslate(req),
           keyCheck: publicCheck(await reporting.lastCheck(req.payload)),
-          languages: languageStatus(locales, options),
+          languages: languageStatus(locales, options, await loadSettings(req.payload)),
           locales,
           releaseUrl: releaseUrl(version),
           reports: { enabled: reporting.enabled, pingUrl: reporting.enabled && url ? reporting.callbackUrl(req.payload, url) : null },
           sdkVersion: SDK_VERSION,
+          settingsUrl: `${req.payload.config.routes?.admin ?? '/admin'}/globals/${SETTINGS_SLUG}`,
           version,
         }
         return Response.json(status)
