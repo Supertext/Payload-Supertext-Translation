@@ -7,6 +7,8 @@ import type { SupertextTranslationOptions } from './types.js'
 
 export { collectSegments, isOptedOut } from './collect.js'
 export { createClient, ENDPOINT_BASE } from './endpoints.js'
+export { exportItem, formatReference, importFile, MAX_UPLOAD_BYTES, parseReference } from './files.js'
+export type { ExportedFile, FileFormat, ItemReference } from './files.js'
 export { sourceCode, SUPERTEXT_TARGETS, targetCode } from './languages.js'
 export { PING_PATH, PLUGIN_NAME, Reporting } from './reporting.js'
 export { applyTranslations, buildHtml, parseHtml } from './segments.js'
@@ -17,6 +19,9 @@ export { translateDocument } from './translate.js'
 export { SUPERTEXT_I18N_NAMESPACE, supertextTranslations } from './translations.js'
 export type { SupertextTranslationKey } from './translations.js'
 export type {
+  FileExportRequestBody,
+  FileImportJob,
+  FileImportResponse,
   KeyCheckStatus,
   LanguageStatus,
   LocaleResult,

@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- Export for translation (XLIFF 1.2 or HTML) and import of translated files; Supertext SDK 0.5.0. In the Translate control, *Export for translation* downloads the document's texts for the chosen languages as an XLIFF file (for translation tools) or an HTML file (one language, e.g. for Supertext's web app); *Import translation* reads the translated file back and saves it like a Supertext translation (as a draft where drafts are on), with a summary of imported, skipped (source changed since the export; optional), untranslated, invalid and missing texts. No API key needed; uploads up to 10 MB, never stored. New endpoints `POST /api/supertext/export` and `/api/supertext/import`.
+
 - **Supertext settings** (admin sidebar → *Supertext* → *Supertext settings*): one combo box per Payload locale (source locale included) with Supertext's languages as *Name (code)*, preselected with Supertext's suggestion, plus a formal/informal select where the chosen language offers one. Stored in a new global `supertext-settings`; only Supertext's codes can be saved. New option `settingsAccess` (default: `access`, else any logged-in user) decides who may change it. **SQL databases: create a migration after updating** (`npx payload migrate:create supertext_settings`), and again whenever you add or remove a locale.
 - The Supertext panel shows where each locale's code comes from (automatic, chosen in the settings, or the `languageMap` option) and links to the settings.
 

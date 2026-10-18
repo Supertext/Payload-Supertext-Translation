@@ -10,6 +10,8 @@ plugins: [supertextTranslation({ collections: ['pages', 'posts'], globals: ['hea
 
 Translates localized `text`, `textarea` and Lexical `richText` fields, including inside groups, tabs, arrays and blocks. Formatting and links in rich text are preserved.
 
+**Translation files:** *Export for translation* downloads a document as XLIFF 1.2 (for translation tools) or HTML; *Import translation* writes the translated file back, with a summary of what was imported.
+
 **Live demo:** <https://payload-production-cfd2.up.railway.app> (admin at `/admin`, credentials from the Supertext team)
 
 **Requirements:** a Supertext account ([create one or log in](https://www.supertext.com/person/en/account/signin)) and an API key from supertext.com → [Integrations → API](https://www.supertext.com/en/integrations/api) (requires the Admin role), set as `SUPERTEXT_API_KEY`. Each Payload locale's Supertext language is chosen in the admin under **Supertext → Supertext settings** (one combo box per locale, preselected: `de` → `de-DE`, `en` → `en-US`, `de-CH` stays `de-CH`); the `languageMap` option can override it for automated setups.

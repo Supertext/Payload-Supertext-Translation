@@ -6,10 +6,11 @@
 src/
   index.ts                 plugin factory: adds endpoints, the Translate control and the dashboard panel
   types.ts                 plugin options and endpoint request/response types
-  endpoints.ts             /api/supertext/status, /translate, /check-key, /ping (auth, validation)
+  endpoints.ts             /api/supertext/status, /translate, /export, /import, /check-key, /ping (auth, validation)
   reporting.ts             Commando Center glue: site URL, state in payload.kv, when Plugin Health's reporter runs
   versions.ts              plugin version (its package.json) and Payload version at runtime
-  translate.ts             translateDocument(): read source locale → collect → Supertext → write target locales
+  translate.ts             loadItem() (read source, collect, save into a locale) and translateDocument(): → Supertext → write target locales
+  files.ts                 translation files: export (XLIFF/HTML) and import with the SDK's TranslationFiles, reference format
   collect.ts               walks the field schema + document; returns Segments and the update payload
   segments.ts              Segment type, HTML build/parse, applying translations
   lexical.ts               Lexical inline content <-> inline HTML (one segment per paragraph)
@@ -37,6 +38,17 @@ demo/                      demo Payload site (Next.js), deployed to Railway — 
 5. `buildHtml` renders segments into one HTML file; `SupertextClient.translateHtml` runs the API round trip; `parseHtml` + `applyTranslations` write results into the clone.
 6. Saves run **serialized** (`payload.update` / `updateGlobal` with `locale`, `draft`), because parallel saves of one document race on its version history and lose a locale.
 7. The response lists a result per locale; one failing locale doesn't stop the others.
+
+### Translation files (export and import)
+
+*Export for translation* and *Import translation* (tabs in the Translate control) use the SDK's `TranslationFiles` (SDK 0.5.0, `src/vendor/supertext-sdk/translation-file.ts`, imported from `src/vendor/supertext-sdk/index.js`: it doesn't call the API, so it isn't in `v1/`). The glue is `src/files.ts`:
+
+- **Segments:** `loadItem(...).collect()`, the same collector as API translation; the file key is the segment's `path` (`title`, `layout.0.heading`, `body.root.0` for a Lexical paragraph), rich text goes as its inline HTML (`html: true`, with the `data-n` attributes the Lexical rebuild needs), plain fields as text.
+- **Job metadata:** `plugin` = `Payload-Supertext-Translation`; `sourceLanguage`/`targetLanguage` = the codes the mapping resolves (`Languages.source`/`target` with the settings and `languageMap`), else the Payload code with `_` → `-`, so unmapped locales can still be exported.
+- **Reference format:** `collection:<slug>:<id>:<sourceLocale>:<targetLocale>` or `global:<slug>:<sourceLocale>:<targetLocale>`, each part URI-encoded (`formatReference`/`parseReference`). The source locale is part of it because the import must collect the segments from the same locale again.
+- **Export** (`POST /api/supertext/export`, `exportItem`): XLIFF = one job per target locale in one file (`exportXliff`), HTML = exactly one target (`exportHtml`). File name `payload-<collection>-<id>[-<locale>].xlf|.html` (globals: `payload-<slug>-…`), `Content-Disposition: attachment`.
+- **Import** (`POST /api/supertext/import`, raw file as the body, `?includeChanged=1`; `readUpload` refuses more than 10 MB by `Content-Length` and while streaming; nothing is stored): `TranslationFiles.read`, then per job: `plugin` must be ours (else *other system*), the reference must parse and name an enabled collection/global (else *not found*), both locales must exist (else *no language*), the item is loaded with the editor's access (`overrideAccess: false`), collected again and passed to `importTranslations`. `ok` results (and `source_changed` with the option) are written into the clone with the same rules as API results (plain: `holder[key]`, rich: the segment's `apply`); every other place gets the target locale's current value back (else it keeps the source, as API translation does), and the clone is saved with `item.save` (draft where drafts are on, serialized). Nothing is saved when nothing was imported.
+- The response is `{ jobs: FileImportJob[] }` with the counts per job, or `{ error }` for errors of the whole file (`TranslationFileError` codes, too large: 413).
 
 ### Field rules
 
@@ -142,6 +154,8 @@ The protocol is Supertext Plugin Health's (`InstallationReporter`, `pingResponse
 | GET | `/api/supertext/status` | `StatusResponse`: `{ apiKeyConfigured, canTranslate, locales, languages, version, releaseUrl, sdkVersion, reports: { enabled, pingUrl }, keyCheck }` — used by the Translate control and the dashboard panel. 401 when not logged in. Runs the reporter's `onRequest` in the background. |
 | POST | `/api/supertext/translate` | Body `TranslateRequestBody`. 200 with `{ results: LocaleResult[] }` if any locale succeeded, 502 if all failed, 400/401/403/500 with `{ error }` for validation, auth, permission and missing-key errors. |
 
+| POST | `/api/supertext/export` | Body `FileExportRequestBody` (`TranslateRequestBody` + `format: 'xliff' \| 'html'`). 200 with the file (`application/x-xliff+xml` or `text/html; charset=utf-8`, `Content-Disposition: attachment`), 422 *Nothing to translate.*, 400/401/403 like `/translate`. No API key needed. |
+| POST | `/api/supertext/import` | Raw file body (≤ 10 MB), `?includeChanged=1`. 200 with `{ jobs: FileImportJob[] }`, 413 too large, 422 for an unreadable file, 401/403 like `/translate`. |
 | POST | `/api/supertext/check-key` | Checks the API key now (`testConnection`), returns `{ keyCheck }`. 401/403 like `/translate`. |
 | GET | `/api/supertext/ping?challenge=…` | Public reachability check for the Commando Center (see above). |
 
@@ -171,6 +185,7 @@ Vitest, in `test/`:
 - `client.test.ts` — the plugin's client on the SDK: API round trip, form fields, status and HTTP error mapping, timeout, 429 retries, key prefix, language codes (exact matches, SDK defaults, nothing guessed beyond them, mapping, source from the mapped code, politeness) (the SDK's own tests run in the SDK repository)
 - `reporting.test.ts` — the Commando Center glue: repo name and version, the setting and `SUPERTEXT_VERSION_REPORTS`, site URL, state in `payload.kv` or memory, `installed` → nothing → `upgraded`, back-off and never throwing, ping answers, the language table
 - `translations.test.ts` — all four languages have the English keys, placeholders and URLs; every key the control and endpoints use and every error code of the SDK has a message; config merging; French messages through Payload's own `initI18n`
+- `files.test.ts` — translation files on a real Payload instance: reference round trip; export (collector keys, mapped and unmapped languages, XLIFF with several targets, HTML with one, globals, nothing to translate, auth); import (XLIFF and HTML written as drafts with Lexical formatting kept, `source_changed` only with the option, untranslated/invalid/missing not written and the target's own text kept, other system, unknown reference, missing locale, unreadable files, 10 MB limit)
 - `integration.test.ts` — boots a real Payload 3 instance on in-memory SQLite with Lexical, drafts, arrays, blocks and a global; covers translating into several locales, drafts, globals, failures, a locale without mapping and default, politeness, the Supertext settings global (selects, preselection, saved mapping used, option wins, unknown codes refused, access) and the endpoints (auth, validation, happy path; status with languages, one `installed` report to a fake center, `api_key_check` after a 401, *Check again*, reports off, the ping)
 
 `test/fakeSupertext.ts` is an in-memory Supertext API that "translates" by prefixing `[<target_lang>]`, and a fake Commando Center (`POST …/report` → 202, recorded in `reports`). No test calls the real API or the real center.
@@ -268,6 +283,7 @@ Publishing to npm is not set up yet; until then installs use the GitHub URL (opt
 - No bulk action in list views yet.
 - Payload blocks embedded in Lexical (BlocksFeature) and Lexical code blocks are not translated.
 - Slate rich text (Payload 2 legacy) is not supported.
+- Translation files: one document per export (no bulk export from list views yet); no screenshots of the Export/Import tabs yet.
 - Re-translating overwrites the target locale's translated fields; there is no change detection or translation memory.
 - No settings form: options are code, so the Supertext panel only shows them, and there is no `settings_saved` report (the key check runs when the key's fingerprint changes and on *Check again*).
 - Human (professional) translation orders, as in the WordPress plugin, are not implemented.

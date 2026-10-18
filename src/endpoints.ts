@@ -1,5 +1,7 @@
 import type { Endpoint, PayloadRequest } from 'payload'
 
+import { exportItem, FileGlueError, importFile, readUpload, TranslationFileError } from './files.js'
+import type { FileFormat } from './files.js'
 import { translate } from './i18n.js'
 import { politenessFor, suggestTargetCode, supportsPoliteness, targetCodeOrNull } from './languages.js'
 import { Reporting, SDK_VERSION, siteUrl } from './reporting.js'
@@ -8,6 +10,8 @@ import type { SavedSettings } from './settings.js'
 import { SupertextClient, SUPERTEXT_ENVIRONMENTS } from './supertext/client.js'
 import { translateDocument } from './translate.js'
 import type {
+  FileExportRequestBody,
+  FileImportResponse,
   KeyCheckStatus,
   LanguageStatus,
   StatusResponse,
@@ -94,6 +98,27 @@ export function createEndpoints(
   const canTranslate = async (req: PayloadRequest) =>
     Boolean(req.user) && (options.access ? await options.access({ req }) : true)
 
+  /** Validates the item part of a translate or export request; returns an error text or the request. */
+  const checkItemRequest = (body: Partial<TranslateRequestBody> | null, locales: string[]): string | TranslateRequestBody => {
+    if (!body || typeof body !== 'object') return 'Expected a JSON body.'
+    const { collection, global, id, sourceLocale } = body
+    const targetLocales = Array.isArray(body.targetLocales) ? body.targetLocales.map(String) : []
+    if (!collection === !global) return 'Pass exactly one of "collection" or "global".'
+    if (collection && !allowedCollections.has(collection)) return `Collection "${collection}" is not enabled for Supertext translation.`
+    if (global && !allowedGlobals.has(global)) return `Global "${global}" is not enabled for Supertext translation.`
+    if (collection && (id === undefined || id === null || id === '')) return 'Missing "id".'
+    if (!sourceLocale || !locales.includes(sourceLocale)) return 'Unknown "sourceLocale".'
+    const unknown = targetLocales.filter((l) => !locales.includes(l))
+    if (unknown.length > 0) return `Unknown target locale(s): ${unknown.join(', ')}.`
+    if (targetLocales.filter((l) => l !== sourceLocale).length === 0) return 'Choose at least one target locale other than the source.'
+    return { collection, global, id, sourceLocale, targetLocales }
+  }
+
+  const fileMessage = (req: PayloadRequest, err: FileGlueError | TranslationFileError): string =>
+    err instanceof TranslationFileError
+      ? translate(req, err.code === 'too_large' ? 'file_too_large' : err.code === 'missing_metadata' ? 'file_missing_metadata' : 'file_invalid_file')
+      : translate(req, `file_${err.code}`, err.vars)
+
   return [
     {
       // Lets the admin panel show whether the plugin is usable before an editor clicks.
@@ -131,24 +156,9 @@ export function createEndpoints(
         if (locales.length === 0) return error(400, translate(req, 'localizationDisabled'))
 
         const body = (await readBody(req)) as Partial<TranslateRequestBody> | null
-        if (!body || typeof body !== 'object') return error(400, 'Expected a JSON body.')
-        const { collection, global, id, sourceLocale } = body
-        const targetLocales = Array.isArray(body.targetLocales) ? body.targetLocales.map(String) : []
-
-        if (!collection === !global) return error(400, 'Pass exactly one of "collection" or "global".')
-        if (collection && !allowedCollections.has(collection)) {
-          return error(400, `Collection "${collection}" is not enabled for Supertext translation.`)
-        }
-        if (global && !allowedGlobals.has(global)) {
-          return error(400, `Global "${global}" is not enabled for Supertext translation.`)
-        }
-        if (collection && (id === undefined || id === null || id === '')) return error(400, 'Missing "id".')
-        if (!sourceLocale || !locales.includes(sourceLocale)) return error(400, 'Unknown "sourceLocale".')
-        const unknown = targetLocales.filter((l) => !locales.includes(l))
-        if (unknown.length > 0) return error(400, `Unknown target locale(s): ${unknown.join(', ')}.`)
-        if (targetLocales.filter((l) => l !== sourceLocale).length === 0) {
-          return error(400, 'Choose at least one target locale other than the source.')
-        }
+        const checked = checkItemRequest(body, locales)
+        if (typeof checked === 'string') return error(400, checked)
+        const { collection, global, id, sourceLocale, targetLocales } = checked
 
         reporting.inBackground('onRequest', req, resolveApiKey(options))
         try {
@@ -175,6 +185,69 @@ export function createEndpoints(
       },
       method: 'post',
       path: `${ENDPOINT_BASE}/translate`,
+    },
+    {
+      // "Export for translation": the item's segments as an XLIFF 1.2 or HTML file (no API call, no API key needed).
+      handler: async (req) => {
+        if (!req.user) return error(401, translate(req, 'notLoggedIn'))
+        if (!(await canTranslate(req))) return error(403, translate(req, 'notAllowed'))
+        const locales = localeCodes(req)
+        if (locales.length === 0) return error(400, translate(req, 'localizationDisabled'))
+        const body = (await readBody(req)) as Partial<FileExportRequestBody> | null
+        const checked = checkItemRequest(body, locales)
+        if (typeof checked === 'string') return error(400, checked)
+        const format: FileFormat = body?.format === 'html' ? 'html' : 'xliff'
+        try {
+          const file = await exportItem({ ...checked, format, options, payload: req.payload, req })
+          return new Response(file.body, {
+            headers: {
+              'Cache-Control': 'no-store',
+              'Content-Disposition': `attachment; filename="${file.filename}"`,
+              'Content-Type': file.contentType,
+            },
+            status: 200,
+          })
+        } catch (err) {
+          if (err instanceof FileGlueError) return error(422, fileMessage(req, err))
+          const status = (err as { status?: number }).status ?? 400
+          return error(status, err instanceof Error ? err.message : String(err))
+        }
+      },
+      method: 'post',
+      path: `${ENDPOINT_BASE}/export`,
+    },
+    {
+      // "Import translation": the raw file as the request body (at most 10 MB), `?includeChanged=1` to also
+      // write texts whose source changed since the export. Parsed in memory, never stored.
+      handler: async (req) => {
+        if (!req.user) return error(401, translate(req, 'notLoggedIn'))
+        if (!(await canTranslate(req))) return error(403, translate(req, 'notAllowed'))
+        const locales = localeCodes(req)
+        if (locales.length === 0) return error(400, translate(req, 'localizationDisabled'))
+        const includeChanged = ['1', 'true'].includes(req.searchParams?.get('includeChanged') ?? '')
+        try {
+          const content = await readUpload(req as unknown as Request)
+          const jobs = await importFile({
+            content,
+            includeChanged,
+            locales,
+            message: (err) => fileMessage(req, err),
+            options,
+            payload: req.payload,
+            req,
+          })
+          const response: FileImportResponse = { jobs }
+          return Response.json(response)
+        } catch (err) {
+          if (err instanceof FileGlueError || err instanceof TranslationFileError) {
+            const tooLarge = err.code === 'too_large'
+            return error(tooLarge ? 413 : 422, fileMessage(req, err))
+          }
+          return error(400, err instanceof Error ? err.message : String(err))
+        }
+      },
+      method: 'post',
+      path: `${ENDPOINT_BASE}/import`,
     },
     {
       // "Check again" on the Supertext panel: checks the API key now (cost-free GET features).

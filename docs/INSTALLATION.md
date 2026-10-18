@@ -168,6 +168,14 @@ export default buildConfig({
 
 Each user then picks the language under *Account* → *Language* (Payload also follows the browser's language on first visit). To reword a string, define it in your own `i18n.translations`, e.g. `{ de: { supertext: { translate: 'Übersetzen lassen' } } }`; your strings win. The interface language is independent of the content locales above.
 
+## Translation files (export and import)
+
+Editors can export a document as an XLIFF 1.2 or HTML file from the Translate control (*Export for translation*), have it translated anywhere, and import the translated file (*Import translation*); see the [User guide](USER_GUIDE.md#export-for-translation-and-import-a-translated-file). There is nothing to configure, and it works without an API key:
+
+- **Permissions:** the same as translating (logged in, the `access` option) plus Payload's own access control: reading the document for the export, updating it for the import.
+- **Uploads:** at most 10 MB, refused before they are read; parsed in memory and never stored. Only files exported by this plugin are accepted, only for the collections and globals in `collections`/`globals`, and the translated texts may only use the formatting of the current source.
+- Reverse proxies in front of Payload must allow request bodies of 10 MB on `/api/supertext/import`.
+
 ## All settings
 
 | Option | Default | Description |

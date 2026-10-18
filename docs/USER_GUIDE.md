@@ -27,6 +27,45 @@ A language marked *no Supertext language yet* in the list can't be ticked: your 
 
 Users who may translate also see a **Supertext translation** panel on the admin dashboard. It is for administrators (whether the Supertext key works, which language each locale is sent as); you don't need it to translate.
 
+## Export for translation and import a translated file
+
+Instead of letting Supertext translate the document right away, you can export it as a file, have it translated elsewhere (by a translator, in a translation tool such as Trados, memoQ or Phrase, or in Supertext's web app) and import the translated file again. Nothing is sent to Supertext's API for this, and no API key is needed.
+
+### Export
+
+1. Open the document and set the **locale selector** to the language you translate **from**. Save first: the file holds the saved version.
+2. Click **Translate** and switch to **Export for translation**.
+3. Tick the languages to translate **into**. Languages marked *no Supertext language yet* can be exported too (the file then carries the Payload code).
+4. Choose the **File format**:
+   - **XLIFF 1.2 (for translation tools)**: the better choice for translators and translation tools. One file can hold several languages. Formatting appears as protected tags the translator can move but not break.
+   - **HTML (one language per file)**: for Supertext's web app or anyone who translates HTML. Choose exactly one language.
+5. Click **Download file**. The file is called e.g. `payload-pages-12-fr.xlf` (`payload-<collection>-<id>-<locale>`; with several languages `payload-pages-12.xlf`).
+
+The file holds exactly the texts the Translate button would send (see *What is translated*). If the document has none, you get *Nothing to translate.* and no file.
+
+Send the file to your translator, or upload it to Supertext's web app. In an **HTML file**, the translator must leave the head (the `supertext:` lines) and the `data-st-id` and `data-n` attributes alone, and translate only the text between the tags. An HTML file can't mark a text as "not translated": imported unchanged, it writes the source text into the target language.
+
+### Import
+
+1. Open any document of an enabled collection or global (the file says which document and language it belongs to), click **Translate** and switch to **Import translation**.
+2. Choose the **Translated file (XLIFF or HTML)** (at most 10 MB).
+3. Leave **Also import texts whose source changed since the export** off, unless you want translations of texts that were edited after the export.
+4. Click **Import translation**.
+
+The translations are saved exactly like a Supertext translation: as a **draft** in the target language where the collection uses drafts, replacing the earlier translation of those fields. Then you see a summary per document and language:
+
+| Line | Meaning |
+| --- | --- |
+| *Imported: n* | Texts written into the target language. |
+| *Skipped, source changed since the export: n* | The source text was edited after the export, so the translation may be outdated. Import again with the option ticked to use it anyway. |
+| *Not translated in the file: n* | The file has no translation for these texts. |
+| *Formatting changed, not imported: n* | The translation broke or added formatting (tags) the source doesn't have. |
+| *Not in the file: n* | Texts added to the document after the export. |
+
+Texts that weren't imported keep what the target language already has there (or the source text where it has nothing yet, as with a Supertext translation).
+
+Errors instead of a summary: *This file isn't a valid XLIFF or HTML translation file.*, *This file wasn't exported by the Supertext plugin, or its header was removed.*, *The file is too large (at most 10 MB).*, *This file belongs to another system (…)* (exported from another Supertext plugin), *The document this file was exported from no longer exists.*, *The site has no language …* (the locale was removed) and *You are not allowed to edit this document.*
+
 ## Review and publish
 
 Switch the locale selector to a translated language to see the result.

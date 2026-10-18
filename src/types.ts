@@ -134,3 +134,26 @@ export type StatusResponse = {
   reports: { enabled: boolean; pingUrl: string | null }
   keyCheck: KeyCheckStatus | null
 }
+
+export type FileExportRequestBody = TranslateRequestBody & {
+  format: 'xliff' | 'html'
+}
+
+/** One job (item × target locale) of an imported translation file. */
+export type FileImportJob = {
+  /** `<collection> <id>` or the global's slug. */
+  item: string
+  targetLocale: string
+  /** Set when the job couldn't be imported at all (other system, not found, no such locale…). */
+  error?: string
+  imported?: number
+  /** Translated, but the source changed since the export, and not imported (the option was off). */
+  sourceChanged?: number
+  untranslated?: number
+  invalid?: number
+  missing?: number
+}
+
+export type FileImportResponse = {
+  jobs: FileImportJob[]
+}
