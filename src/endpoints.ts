@@ -7,7 +7,7 @@ import { politenessFor, suggestTargetCode, supportsPoliteness, targetCodeOrNull 
 import { Reporting, SDK_VERSION, siteUrl } from './reporting.js'
 import { effectiveSettings, loadSettings, SETTINGS_SLUG } from './settings.js'
 import type { SavedSettings } from './settings.js'
-import { SupertextClient, SUPERTEXT_ENVIRONMENTS } from './supertext/client.js'
+import { REVIEW_URL, SupertextClient, SUPERTEXT_ENVIRONMENTS } from './supertext/client.js'
 import { translateDocument } from './translate.js'
 import type {
   FileExportRequestBody,
@@ -31,11 +31,21 @@ export function apiBaseUrl(options: SupertextTranslationOptions): string {
   return options.apiUrl ?? SUPERTEXT_ENVIRONMENTS[options.environment ?? 'live']
 }
 
+/**
+ * The review service for locales with *Translation review* on: the `reviewUrl` option, else
+ * `SUPERTEXT_REVIEW_URL`, else Supertext's review service. `''` turns review off everywhere.
+ */
+export function resolveReviewUrl(options: SupertextTranslationOptions): string {
+  return (options.reviewUrl ?? process.env.SUPERTEXT_REVIEW_URL ?? REVIEW_URL).trim()
+}
+
+/** The client for translations; `forReview(true)` gives the one for review locales. */
 export function createClient(options: SupertextTranslationOptions): SupertextClient {
   return new SupertextClient({
     apiKey: resolveApiKey(options),
     baseUrl: apiBaseUrl(options),
     pollIntervalMs: options.pollIntervalMs,
+    reviewUrl: resolveReviewUrl(options),
     timeoutMs: options.timeoutMs,
   })
 }
@@ -63,7 +73,7 @@ async function readBody(req: PayloadRequest): Promise<unknown> {
 export function languageStatus(
   locales: string[],
   options: SupertextTranslationOptions,
-  saved: SavedSettings = { languageMap: {}, politeness: {} },
+  saved: SavedSettings = { languageMap: {}, politeness: {}, review: {} },
 ): LanguageStatus[] {
   const settings = effectiveSettings(saved, options)
   return locales.map((locale) => {

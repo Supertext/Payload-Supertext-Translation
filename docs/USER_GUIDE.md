@@ -90,6 +90,8 @@ If you are unsure which one the main button does, use the arrow menu and pick th
 
 Translating again overwrites the earlier translation of the translated fields in that language, including any manual edits you made there.
 
+**Translation review:** if your administrator turned on *Translation review* for a language, reviewers (your colleagues or Supertext linguists) check and correct the translations on the website. Their corrections come into Payload the next time you translate the document into that language: after a review, translate it again. Texts reviewed once keep their corrected wording in later translations.
+
 ## What is translated
 
 - Localized text and text area fields

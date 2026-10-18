@@ -139,7 +139,7 @@ describe('languageStatus', () => {
       languageStatus(
         ['de-CH', 'en-US', 'de', 'zh', 'it', 'de-LI'],
         { languageMap: { zh: 'zh-Hant' }, politeness: { 'de-CH': 'more', 'en-US': 'less' } },
-        { languageMap: { it: 'it-CH', zh: 'zh-Hans' }, politeness: { it: 'less' } },
+        { languageMap: { it: 'it-CH', zh: 'zh-Hans' }, politeness: { it: 'less' }, review: {} },
       ),
     ).toEqual([
       { locale: 'de-CH', origin: 'automatic', politeness: 'more', politenessSupported: true, supertext: 'de-CH' },

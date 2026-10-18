@@ -85,6 +85,7 @@ AI file translation API v1, same as the WordPress plugin: POST HTML file → pol
 
 - `npm test` (Vitest; includes a real Payload instance on in-memory SQLite), `npm run typecheck`, `npm run build`. All three must pass before committing.
 - New options go in `src/types.ts` **and** the settings table in `docs/INSTALLATION.md`.
+- *Translation review* is the per-locale checkbox `l_<locale>_review` in the *Supertext settings* global (`src/settings.ts`, option `review` overrides it); `reviewUrl`/`SUPERTEXT_REVIEW_URL` and `SupertextClient.forReview()` send those locales through Supertext's review service.
 - The *Supertext settings* global (`supertext-settings`) is part of every user's schema: changing its fields (or an SDK update with new targets) needs a migration on their side; say so in the CHANGELOG.
 - UI and error strings live in `src/translations.ts` (English, German, French, Italian); add every new string in all four.
 - The dashboard panel is referenced as `payload-supertext-translation/client#SupertextStatus`; renaming it is a breaking change too.

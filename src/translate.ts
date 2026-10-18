@@ -137,7 +137,8 @@ export async function translateDocument(args: TranslateDocumentArgs): Promise<Lo
 
         // Locales without mapping and default, and a tone the target lacks, fail here, before anything is sent.
         const targetLang = targetCode(locale, settings.languageMap)
-        const html = await client.translateHtml({
+        // Locales with *Translation review* on go through the review service (same key, same protocol).
+        const html = await client.forReview(settings.review[locale] === true).translateHtml({
           html: buildHtml(segments),
           politeness: politenessForTarget(locale, targetLang, settings.politeness),
           sourceLang: sourceCode(sourceLocale, settings.languageMap),

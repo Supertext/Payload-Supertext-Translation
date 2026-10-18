@@ -230,7 +230,7 @@ describe('with a real Payload instance', () => {
 
   describe('Supertext settings (one combo box per locale)', () => {
     afterAll(async () => {
-      await payload.updateGlobal({ data: { languages: { l_de_LI: null, l_en: null, l_fr: null } } as never, slug: 'supertext-settings' as never })
+      await payload.updateGlobal({ data: { languages: { l_de_CH_review: false, l_de_LI: null, l_en: null, l_fr: null } } as never, slug: 'supertext-settings' as never })
     })
 
     it('has a select per locale with the SDK targets, preselecting the suggestion', () => {
@@ -264,6 +264,48 @@ describe('with a real Payload instance', () => {
       expect(results.map((r) => r.ok)).toEqual([true, true])
       const targets = fake.calls.filter((c) => c.method === 'POST').map((c) => c.form?.get('target_lang'))
       expect(targets.sort()).toEqual(['de-CH', 'fr-FR'])
+    })
+
+    it('has a Translation review checkbox per locale, off by default, and sends review locales to the review service', async () => {
+      const global = payload.config.globals.find((g) => g.slug === 'supertext-settings')!
+      const group = global.fields[0] as { fields: { fields: Record<string, any>[] }[] }
+      const checkboxes = group.fields.map((row) => row.fields[2]!)
+      expect(checkboxes.map((f) => [f.name, f.type, f.defaultValue])).toEqual([
+        ['l_en_review', 'checkbox', false],
+        ['l_de_CH_review', 'checkbox', false],
+        ['l_fr_review', 'checkbox', false],
+        ['l_de_LI_review', 'checkbox', false],
+      ])
+      expect(checkboxes[1]!.label.de).toBe('Übersetzungsprüfung')
+
+      await payload.updateGlobal({ data: { languages: { l_de_CH_review: true } } as never, slug: 'supertext-settings' as never })
+      const page = await payload.create({ collection: 'pages', data: { title: 'Reviewed' }, locale: 'en' })
+      const fake = fakeSupertext()
+      const results = await translateDocument({
+        client: new SupertextClient({ apiKey: 'test-key', fetch: fake.fetch, reviewUrl: 'https://review.test/v1/', sleep: async () => {} }),
+        collection: 'pages',
+        id: page.id,
+        options,
+        payload,
+        sourceLocale: 'en',
+        targetLocales: ['de-CH', 'fr'],
+      })
+      expect(results.map((r) => r.ok)).toEqual([true, true])
+      const byTarget = (lang: string) => {
+        const id = fake.calls.findIndex((c) => c.method === 'POST' && c.form?.get('target_lang') === lang)
+        const fileId = `f${fake.calls.slice(0, id + 1).filter((c) => c.method === 'POST').length}`
+        return fake.calls.filter((c, i) => i === id || c.url.includes(`/${fileId}`)).map((c) => `${c.method} ${c.url}`)
+      }
+      expect(byTarget('de-CH')).toEqual([
+        'POST https://review.test/v1/translate/ai/file',
+        expect.stringMatching(/^GET https:\/\/review\.test\/v1\/translate\/ai\/file\/f\d\/status$/),
+        expect.stringMatching(/^GET https:\/\/review\.test\/v1\/translate\/ai\/file\/f\d\/translation$/),
+        expect.stringMatching(/^DELETE https:\/\/review\.test\/v1\/translate\/ai\/file\/f\d$/),
+      ])
+      expect(byTarget('fr-FR').every((c) => c.includes(' https://api.supertext.com/v1/'))).toBe(true)
+      expect(byTarget('fr-FR')).toHaveLength(4)
+      const saved = await payload.findGlobal({ slug: 'supertext-settings' as never })
+      expect((saved as { languages: Record<string, unknown> }).languages.l_fr_review).toBe(false)
     })
 
     it('is only for logged-in users', async () => {

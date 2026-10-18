@@ -21,8 +21,14 @@ export type SupertextTranslationOptions = {
   apiKey?: string
   /** `live` (default), `staging` or `testing`. Ignored when `apiUrl` is set. */
   environment?: SupertextEnvironment
-  /** Explicit API base URL, e.g. a proxy. Overrides `environment`. */
+  /** Explicit API base URL. Overrides `environment`. For Translation review use the settings' checkbox instead. */
   apiUrl?: string
+  /**
+   * Review service for locales with *Translation review* on (Supertext → Supertext settings).
+   * Default: `process.env.SUPERTEXT_REVIEW_URL`, else Supertext's review service (`REVIEW_URL`).
+   * `''` turns review off for every locale. Only change it when Supertext gives you another address.
+   */
+  reviewUrl?: string
 
   /**
    * Optional override of the *Supertext settings* screen (one combo box per locale), for
@@ -40,6 +46,12 @@ export type SupertextTranslationOptions = {
    * offer it (see docs/INSTALLATION.md); for others the translation fails with a clear message.
    */
   politeness?: Record<string, Politeness>
+  /**
+   * Optional override of the *Translation review* checkbox on the Supertext settings screen:
+   * Payload locale code → on/off, e.g. `{ 'de-CH': true }`. An entry here wins (the checkbox is
+   * then read-only).
+   */
+  review?: Record<string, boolean>
   /**
    * Who may open and change the *Supertext settings* (language mapping). Default: the `access`
    * option, else any logged-in user. Restrict it to administrators where your users have roles,

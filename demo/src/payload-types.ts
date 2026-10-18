@@ -493,6 +493,10 @@ export interface SupertextSetting {
         )
       | null;
     l_en_tone?: ('default' | 'more' | 'less') | null;
+    /**
+     * Translations into this language go through Supertext’s review service, so reviewers can check and correct them on the website with the Supertext Localization Review extension. Their corrections are used the next time the document is translated.
+     */
+    l_en_review?: boolean | null;
     l_de_CH?:
       | (
           | 'sq'
@@ -535,6 +539,10 @@ export interface SupertextSetting {
         )
       | null;
     l_de_CH_tone?: ('default' | 'more' | 'less') | null;
+    /**
+     * Translations into this language go through Supertext’s review service, so reviewers can check and correct them on the website with the Supertext Localization Review extension. Their corrections are used the next time the document is translated.
+     */
+    l_de_CH_review?: boolean | null;
     l_fr_CH?:
       | (
           | 'sq'
@@ -577,6 +585,10 @@ export interface SupertextSetting {
         )
       | null;
     l_fr_CH_tone?: ('default' | 'more' | 'less') | null;
+    /**
+     * Translations into this language go through Supertext’s review service, so reviewers can check and correct them on the website with the Supertext Localization Review extension. Their corrections are used the next time the document is translated.
+     */
+    l_fr_CH_review?: boolean | null;
     l_it_CH?:
       | (
           | 'sq'
@@ -619,6 +631,10 @@ export interface SupertextSetting {
         )
       | null;
     l_it_CH_tone?: ('default' | 'more' | 'less') | null;
+    /**
+     * Translations into this language go through Supertext’s review service, so reviewers can check and correct them on the website with the Supertext Localization Review extension. Their corrections are used the next time the document is translated.
+     */
+    l_it_CH_review?: boolean | null;
   };
   updatedAt?: string | null;
   createdAt?: string | null;
@@ -650,12 +666,16 @@ export interface SupertextSettingsSelect<T extends boolean = true> {
     | {
         l_en?: T;
         l_en_tone?: T;
+        l_en_review?: T;
         l_de_CH?: T;
         l_de_CH_tone?: T;
+        l_de_CH_review?: T;
         l_fr_CH?: T;
         l_fr_CH_tone?: T;
+        l_fr_CH_review?: T;
         l_it_CH?: T;
         l_it_CH_tone?: T;
+        l_it_CH_review?: T;
       };
   updatedAt?: T;
   createdAt?: T;
