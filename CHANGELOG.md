@@ -6,6 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- Support for Node.js 24 and 26, tested in CI next to Node 20 and 22. Tested with Payload 3.91 (the demo runs 3.91.0 with Next.js 16.4).
 - **Translation review** per locale (**Supertext → Supertext settings** → *Translation review* under each locale, off by default): translations into a locale with it ticked go through Supertext's review service (Supertext Localization Review), where customers and Supertext linguists correct them on the website with a Chrome extension; corrections come back into Payload with the next translation, and texts translated before keep their (reviewed) wording. Same API key, billing, languages and messages; other locales keep going directly to Supertext. New options `reviewUrl` (default `SUPERTEXT_REVIEW_URL`, else Supertext's review service; `''` turns review off everywhere) and `review` (per-locale override, the checkbox is then read-only). All four interface languages. **SQL databases: create a migration after updating** (`npx payload migrate:create supertext_translation_review`): the *Supertext settings* global gets one boolean column per locale (`languages_l_<locale>_review`, default off).
 - Requests to Supertext name the plugin's version in the User-Agent (`Payload-Supertext-Translation/<version>`).
 

@@ -194,7 +194,7 @@ Vitest, in `test/`:
 
 ## CI / deploy
 
-`.github/workflows/ci.yml` runs typecheck, tests and build on Node 20 and 22 for pushes to `main` and pull requests.
+`.github/workflows/ci.yml` runs typecheck, tests and build on Node 20, 22, 24 and 26 for pushes to `main` and pull requests.
 
 ### Demo app (`demo/`)
 

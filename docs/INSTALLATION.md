@@ -6,7 +6,7 @@ For administrators and developers who set up a Payload project. Editors: see the
 
 | | |
 | --- | --- |
-| Payload | 3.x (tested with 3.90) |
+| Payload | 3.x (tested with 3.91) |
 | Node.js | 20.9 or newer |
 | React | 19 (as required by Payload 3) |
 | Database | any Payload adapter (tested with SQLite and Postgres; MongoDB uses the same Local API) |
