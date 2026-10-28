@@ -14,15 +14,15 @@
     "payload": "cross-env NODE_OPTIONS=--no-deprecation payload"
   },
   "dependencies": {
-    "@payloadcms/db-postgres": "^3.91.0",
-    "@payloadcms/next": "3.91.0",
-    "@payloadcms/richtext-lexical": "3.91.0",
-    "@payloadcms/translations": "^3.91.0",
-    "@payloadcms/ui": "3.91.0",
+    "@payloadcms/db-postgres": "^3.92.1",
+    "@payloadcms/next": "3.92.1",
+    "@payloadcms/richtext-lexical": "3.92.1",
+    "@payloadcms/translations": "^3.92.1",
+    "@payloadcms/ui": "3.92.1",
     "cross-env": "^7.0.3",
     "graphql": "^16.8.1",
-    "next": "16.4.2",
-    "payload": "3.91.0",
+    "next": "16.4.3",
+    "payload": "3.92.1",
     "payload-supertext-translation": "file:./vendor/payload-supertext-translation.tgz",
     "react": "19.3.1",
     "react-dom": "19.3.1"
